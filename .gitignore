@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+
+.venv/
+venv/
+env/
+
+.DS_Store
+**/.DS_Store
+
+# Local database (SQLite) — not committed; re-seed from CSVs
+football_analytics.db
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Environment / secrets
+.env
+*.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Large data outputs
+*.csv.gz
