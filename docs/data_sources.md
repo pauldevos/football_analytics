@@ -22,7 +22,14 @@ rush_att, rush_yds, rush_td, rush_long,
 rec, rec_yds, rec_td, rec_lng
 ```
 
+**Era differences:**
+- Pre-~2002: no `targets` column; `fumble`/`fumble_lost` absent
+- ~2002+: `targets` added
+- 2021+: `fumble`, `fumble_lost` added
+
 **What it gives us:**
+- Individual player game stats for every offensive player — the raw material for
+  individual OQA (see `docs/offensive_oqa_framework.md` and `scripts/etl_player_game_offense.py`)
 - `sacked` on QB rows = total sacks that QB was charged in this game → proxy for team defensive sack count per game
 - Opponent pass attempts + rush attempts → denominator for sack rate, disruption rate
 - Opponent scoring (derived from game_id lookup) → pts allowed per game
@@ -300,7 +307,49 @@ Player, Solo, Assist, Totals (or Total Tackles), Sacks-Yds
 
 ---
 
-## 7. Data Not Yet In Hand (Future Acquisition)
+## 7. Computed ETL Outputs (`data_output/`)
+
+These are derived from the raw PFR CSVs by ETL scripts. They are the primary inputs
+for analysis scripts and notebooks.
+
+### 7.1 Team Game Offense + OQA (offense perspective)
+
+**Script:** `scripts/etl_oqa_boxscores.py`
+
+| File | Description |
+|------|-------------|
+| `team_game_offense_{year}.csv` | Per-game team offense totals (passing, rushing, receiving by position group) |
+| `oqa_game_detail_{year}.csv` | Leave-one-out OQA from the **offense's** perspective: for each game, the offense's season average (excluding that game) and the actual vs. average delta |
+
+Sign convention: negative delta = defense held offense below their norm (good for defense).
+INT/sacks: positive delta = more than offense's typical rate.
+
+### 7.2 Individual Player Game Offense + OQA (defense perspective)
+
+**Script:** `scripts/etl_player_game_offense.py`
+
+| File | Description |
+|------|-------------|
+| `player_game_offense_{year}.csv` | One row per player per regular-season game; actual stats + per-game OQA delta vs. defense's LOO average |
+| `defense_loo_avg_{year}.csv` | Leave-one-out averages from the **defense's** perspective: for each (game, defending_team), average of stats that defense allowed in all other games that season |
+| `player_oqa_season_{year}.csv` | Season rollup: for each player, totals and per-game averages of all deltas |
+
+**Position-specific delta computation:**
+
+| Position | Comparison |
+|----------|-----------|
+| QB | Actual passing stats vs defense's average passing stats allowed |
+| RB | Carry-adjusted: `actual_rush_yds − (rush_att × defense_avg_YPC_allowed)` — see Q15 in open_questions.md for why |
+| WR | Individual rec_yds vs defense's total WR rec_yds allowed (group-level; see Q16) |
+| TE | Individual rec_yds vs defense's total TE rec_yds allowed; `is_primary` flags top TE per game |
+
+**`is_primary` flag:** Marks the top statistical producer per position group per
+team per game (most pass_att for QB, most rush_yds for RB, most rec_yds for WR/TE).
+Useful for filtering to feature-back/top-TE comparisons.
+
+---
+
+## 8. Data Not Yet In Hand (Future Acquisition)
 
 | Data | Source | Use |
 |------|--------|-----|

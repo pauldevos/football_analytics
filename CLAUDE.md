@@ -65,15 +65,34 @@ Media guide data:
 
 PostgreSQL. Schema in `schema/`. Seeded from CSV files above via ETL scripts in `scripts/`.
 
+## Companion Analysis: QB Value & Defensive Context
+
+`notebooks/qb_value_analysis.ipynb` — tests the hypothesis that Tom Brady's GOAT status
+is inflated by consistently elite defensive support. Full findings in `docs/qb_value_analysis.md`.
+
+**Confirmed headline numbers** (1,700+ NFL team-seasons 1960–2024):
+- Defense PPG rank vs Win%: **r = −0.70** vs. QB rating vs Win%: r = 0.53
+- Top-10% defense → 83% chance of 10+ wins; bottom-25% defense → 3%
+- Manning: +2.99 WAE/season at 45th-percentile defense (below avg) — strongest "pure QB" case
+- Brady: +2.09 WAE/season at 20th-percentile defense (top 20%) — great QB, great defense
+- Dilfer: −1.93 WAE/season despite 26th-percentile defense — the canonical clipboard QB
+
+**Planned case studies** (player debates arguing context):
+- Defense-carried SB wins: McMahon/Bears, Dilfer/Ravens, Montana framing
+- Penalized by bad defense: Marino, Rodgers, Drew Brees (45.7 total WAE, often overlooked)
+- Overlooked: Staubach (+2.11 WAE/season), Steve Young, Mahomes
+
 ## Document Index
 
 | File | Purpose |
 |------|---------|
-| `docs/analytical_framework.md` | Full methodology, formulas, component weights |
+| `docs/analytical_framework.md` | Full DPVS methodology, formulas, component weights |
+| `docs/offensive_oqa_framework.md` | Offensive player OQA: per-player context-adjusted stats (QB/RB/WR/TE), carry-adjusted RB metric, WR #1 identification |
 | `docs/data_sources.md` | Inventory of every data source, columns, coverage, quality notes |
 | `docs/schema.md` | PostgreSQL table definitions and relationships |
 | `docs/roadmap.md` | Phased implementation plan |
 | `docs/open_questions.md` | Decisions still to be made, edge cases, research TODOs |
+| `docs/qb_value_analysis.md` | QB value hypothesis, confirmed findings, WAE table, planned case studies |
 
 ## Conventions
 

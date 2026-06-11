@@ -56,6 +56,73 @@ c) Try to source tackle data from the media guide pipeline (team yearbooks often
 
 ---
 
+## Offensive Player OQA
+
+### Q15: RB Comparison Baseline — Resolved
+
+**Issue:** Should an individual RB's rush yards be compared against the defense's
+total team rush yards allowed per game, or something else?
+
+**Discovery (the Keith Byars problem):** The naive comparison (individual yards vs.
+team defensive average) systematically produces negative deltas for *all* running
+backs, including elite ones. Herschel Walker (1,514 rush yards, 1988) came out at
+−260 for the season; Eric Dickerson (1,659 yards) at −320. The root cause: defenses
+allow ~110 rush yards per game *to the whole team*, but even a featured back averages
+only 90 yards per game — multiple players share carries.
+
+Keith Byars (PHI 1988) made this explicit. As a receiving/blocking back, he got
+5–50 rushing yards per game while facing defenses that allow 100+ team rush yards.
+The naive metric read him as −1,297 yards for the season — worse than any starter —
+with no useful signal.
+
+**Resolution:** Use carry-adjusted expected yards:
+```
+expected_rush_yds = player_rush_att × defense_avg_rush_ypc_allowed
+delta_rush_yds    = actual_rush_yds − expected_rush_yds
+```
+
+This measures per-carry efficiency vs. the defense, controlling for the number of
+carries the player received. Barry Sanders 1997 goes from +264 (naive, still wrong
+direction) to +712 carry-adjusted, with individual game breakdowns showing his
+greatest performances in proper context.
+
+**Status:** Resolved. Implemented in `scripts/etl_player_game_offense.py`.
+
+---
+
+### Q16: WR #1 Identification for Individual OQA — Planned
+
+**Issue:** Teams play 3+ WRs per game. Comparing one WR's yards to the defense's
+total WR yards allowed mixes role types. The 2007 Patriots problem:
+
+- Randy Moss: massive yards, double coverage, unambiguous #1 WR by impact
+- Wes Welker: leads the team in receptions on short routes as the slot receiver
+
+By reception count, Welker appears to be the #1 WR. By per-game yards and
+contextual role, Moss is clearly #1.
+
+**Proposed approach:** Rank WRs by **season yards per game** (total rec_yds /
+games_played — not total yards, to avoid penalizing players for missed games due
+to injury). The #1 WR for the season is the highest YPG receiver.
+
+For any specific game: check if the #1 WR played. If yes, mark them `is_primary`.
+If they missed the game (injury, etc.), fall back to the next-highest YPG WR who
+has a row in `player_game_offense` for that game.
+
+For the defense-side average: instead of "total WR yards allowed per game,"
+compute "yards allowed specifically to the opponent's #1 WR per game" — requiring
+a second-pass calculation after #1 WR identification.
+
+**Validation:** 2007 New England Patriots — Moss should be identified as #1 WR
+by this method. Any season with a clear top receiver (Randy Moss, Jerry Rice,
+Calvin Johnson in peak years) should pass a similar sanity check.
+
+**Status:** Planned. Current implementation stores individual WR game stats and
+uses WR group totals as a floor comparison. `is_primary` flag marks the top
+rec_yds WR per team per game as a placeholder.
+
+---
+
 ## Data / Infrastructure
 
 ### Q10: PostgreSQL vs. SQLite

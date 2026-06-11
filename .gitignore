@@ -29,3 +29,12 @@ football_analytics.db
 
 # Large data outputs
 *.csv.gz
+
+# Generated ETL output — re-derived from source CSVs in /Users/devos/data/pfref/
+data_output/
+
+# Executed notebooks — contain large embedded Plotly outputs; track source only
+notebooks/*_executed.ipynb
+
+# Brave scraper browser profile
+.brave_scraper_profile/
