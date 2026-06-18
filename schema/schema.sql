@@ -143,7 +143,7 @@ CREATE TABLE player_defense_season (
     is_all_pro_1    BOOLEAN DEFAULT FALSE,
     is_all_pro_2    BOOLEAN DEFAULT FALSE,
     is_dpoy         BOOLEAN DEFAULT FALSE,
-    tackles_source  TEXT,                       -- 'pfr_2001+', 'gamebook', 'estimate', NULL
+    tackles_source  TEXT,                       -- 'pfr', 'media_guide', 'card_back', 'gamebook', 'pfr_and_media_guide', 'estimate', NULL
     PRIMARY KEY (pfr_player_id, season, team_abbrev)
 );
 
