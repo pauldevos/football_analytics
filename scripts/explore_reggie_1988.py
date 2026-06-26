@@ -17,7 +17,7 @@ def load_csv(path):
         return list(csv.DictReader(f))
 
 def reggie_1988():
-    rows = load_csv(PFREF / "player-stats/defense/defense_1988.csv")
+    rows = load_csv(PFREF / "raw/season/player/defense/defense_1988.csv")
     reggie = [r for r in rows if "WhitRe00" in r.get("player_link", "")]
     print("=== Reggie White 1988 ===")
     for r in reggie:
@@ -72,7 +72,7 @@ def phi_1988_game_sacks():
 # ─── 5. PHI 1988 sack totals — all defenders ────────────────────────────────
 
 def phi_1988_all_sacks():
-    rows = load_csv(PFREF / "player-stats/defense/defense_1988.csv")
+    rows = load_csv(PFREF / "raw/season/player/defense/defense_1988.csv")
     phi_def = [r for r in rows if r.get("team_abbrev") == "PHI"]
     phi_def.sort(key=lambda r: float(r.get("sack") or 0), reverse=True)
     team_sacks = sum(float(r.get("sack") or 0) for r in phi_def)
@@ -87,7 +87,7 @@ def phi_1988_all_sacks():
 # ─── 6. GNB 1993 roster — Reggie + teammates ────────────────────────────────
 
 def gnb_1993_roster():
-    roster_path = PFREF / "team-rosters/gnb_1993_roster.csv"
+    roster_path = PFREF / "raw/season/rosters/gnb_1993_roster.csv"
     if not roster_path.exists():
         print("\n[gnb_1993_roster.csv not found]")
         return

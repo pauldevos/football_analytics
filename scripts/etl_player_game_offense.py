@@ -34,8 +34,8 @@ from collections import defaultdict
 from pathlib import Path
 
 PFREF        = Path("/Users/devos/data/pfref")
-BOXSCORE_DIR = PFREF / "boxscores"
-ROSTER_DIR   = PFREF / "team-rosters"
+BOXSCORE_DIR = PFREF / "raw" / "boxscores"
+ROSTER_DIR   = PFREF / "raw" / "season" / "rosters"
 OUTPUT_DIR   = Path(__file__).parent.parent / "data_output"
 
 # Minimum pass attempts to treat a row as a "QB game" for OQA purposes

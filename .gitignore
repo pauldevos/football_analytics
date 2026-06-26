@@ -38,3 +38,6 @@ notebooks/*_executed.ipynb
 
 # Brave scraper browser profile
 .brave_scraper_profile/
+
+# Runtime logs from overnight scrape runs
+logs/

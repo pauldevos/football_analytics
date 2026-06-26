@@ -46,8 +46,8 @@ from pathlib import Path
 
 # ── paths ─────────────────────────────────────────────────────────────────────
 
-GAMELOG_DIR  = Path("/Users/devos/data/pfref/season-gamelogs")
-BOXSCORE_DIR = Path("/Users/devos/data/pfref/boxscores")
+GAMELOG_DIR  = Path("/Users/devos/data/pfref/raw/season/gamelogs")
+BOXSCORE_DIR = Path("/Users/devos/data/pfref/raw/boxscores")
 OUTPUT_DIR   = Path("/Users/devos/data/pfref/boxscore-defense")
 BASE_URL     = "https://www.pro-football-reference.com"
 
