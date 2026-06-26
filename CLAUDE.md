@@ -1,5 +1,7 @@
 # CLAUDE.md — NFL Defensive Player Value Analytics
 
+> **Project context:** Read `~/github/football/DEFENSIVE_STATS_PROJECT.md` first for the full picture of the multi-source defensive stats database this scoring system depends on.
+
 ## Project Purpose
 
 Build a comprehensive, historically grounded metric — **DPVS (Defensive Player Value Score)** — that assigns a fair, context-adjusted value to individual NFL defensive players across any era. The canonical test case is Reggie White (PHI 1988, GNB 1993) but the system should work for any player from 1950 onward wherever data allows.
@@ -14,9 +16,9 @@ The core problem: traditional counting stats (sacks, tackles) fail to capture co
 
 | Repo | Purpose |
 |------|---------|
-| `/Users/devos/github/football/pfref/` | PFR scraper — offensive/defensive player stats, team stats, rosters, boxscores |
-| `/Users/devos/github/gamebooks_research/` | Gamebook OCR pipeline — per-play defender attribution from 1967–1981 gamebook PDFs |
-| `/Users/devos/github/media_guide_parser/` | Media guide PDF extraction — defensive season stats from team yearbooks (pre-1995 fills) |
+| `/Users/devos/github/football/football_analytics/ingestion/pfref/` | PFR scraper — offensive/defensive player stats, team stats, rosters, boxscores |
+| `/Users/devos/github/football/gamebooks_research/` | Gamebook OCR pipeline — per-play defender attribution from 1967–1981 gamebook PDFs |
+| `/Users/devos/github/football/media_guide_parser/` | Media guide PDF extraction — defensive season stats from team yearbooks (pre-1995 fills) |
 
 ## Primary Data
 
@@ -35,11 +37,11 @@ All under `/Users/devos/data/pfref/`:
 Gamebook play-by-play (defender attribution):
 - `/Users/devos/data/gamebooks_processed/ocr_cache_mistral/` — Mistral OCR'd text files (hash-keyed)
 - `/Users/devos/data/gamebooks_processed/ocr_named_mistral/` — same, named `YYYYMMDDVIS@HOME.txt`
-- Processed CSVs in `/Users/devos/github/gamebooks_research/` (see that repo's CLAUDE.md)
+- Processed CSVs in `/Users/devos/github/football/gamebooks_research/` (see that repo's CLAUDE.md)
 - Teams available: Minnesota Vikings 1967–1981, Pittsburgh Steelers 1969–1973
 
 Media guide data:
-- `/Users/devos/github/media_guide_parser/` — extraction pipeline, 982+ pages processed
+- `/Users/devos/github/football/media_guide_parser/` — extraction pipeline, 982+ pages processed
 - Fills gaps for pre-1995 team defensive stats not available on PFR
 
 ## Key Data Gaps & Workarounds

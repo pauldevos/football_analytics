@@ -142,7 +142,7 @@ WHERE pfr_player_id = '/players/W/WhitRe00.htm';
 - Insert with `data_source = 'gamebook_mistral'` or `'gamebook_tesseract'`
 
 **6b. PFR boxscore play-by-play (scraper built, not yet run)**
-- `play_by_play.py` module added to `/Users/devos/github/football/pfref/`
+- `play_by_play.py` module added to `/Users/devos/github/football/football_analytics/ingestion/pfref/`
 - Reuses existing boxscore page fetch; parses `id="pbp"` table (buried in HTML comments, handled via `strip_comments=True`)
 - Each play's `detail` column names individual defenders
 - Run: `pfref.play_by_play.scrape_pbp(years=range(1982, 2002), teams=["phi"])` for PHI priority

@@ -3,7 +3,7 @@
 ## 1. Pro Football Reference — Scraped CSV Data
 
 **Root:** `/Users/devos/data/pfref/`
-**Scraper:** `/Users/devos/github/football/pfref/`
+**Scraper:** `/Users/devos/github/football/football_analytics/ingestion/pfref/`
 
 ---
 
@@ -174,7 +174,7 @@ Draft position is a reasonable proxy for expected player talent level, useful in
 
 **Processed cache:** `/Users/devos/data/gamebooks_processed/ocr_cache_mistral/` (hash-keyed)
 **Named copies:** `/Users/devos/data/gamebooks_processed/ocr_named_mistral/` (game ID named)
-**Research repo:** `/Users/devos/github/gamebooks_research/`
+**Research repo:** `/Users/devos/github/football/gamebooks_research/`
 
 **What it gives us:**
 - Individual defender named on each play (tackle, sack, fumble forced, etc.)
@@ -203,7 +203,7 @@ is_solo, co_tacklers, ocr_conf, description, play_text
 - ERA2 (1974–1977): More consistent, parenthetical notation `(Page, Hilgenberg)`
 - ERA3 (1978–1981): Best structure, consistent format per play
 
-**Tackle share file:** `/Users/devos/github/gamebooks_research/tackle_share.csv`
+**Tackle share file:** `/Users/devos/github/football/gamebooks_research/tackle_share.csv`
 ```
 year, filename, page_credits, total_credits, tackle_share, players_credited
 ```
@@ -214,7 +214,7 @@ year, filename, page_credits, total_credits, tackle_share, players_credited
 
 ## 3. NFL Media Guides
 
-**Parser repo:** `/Users/devos/github/media_guide_parser/`
+**Parser repo:** `/Users/devos/github/football/media_guide_parser/`
 **Processed output:** Within that repo's `output/` and `output_targeted/` dirs
 **982 pages processed** (as of May 2026)
 
@@ -253,7 +253,7 @@ Legend: ✓ = reliable, ~ = partial/reconstructed, ✗ = not available from curr
 
 ## 5. Play-by-Play from Boxscores (Scraper Built, Not Yet Run)
 
-**Module:** `/Users/devos/github/football/pfref/play_by_play.py`
+**Module:** `/Users/devos/github/football/football_analytics/ingestion/pfref/play_by_play.py`
 **Output:** `~/data/pfref/boxscores_pbp/{year}/{game_id}.csv`
 
 Each PFR boxscore page contains a full play-by-play table (`id="pbp"`) buried in an HTML comment block. The existing scraper's `strip_comments=True` flag unlocks it with no extra HTTP requests — the page is already fetched for the offense table.
