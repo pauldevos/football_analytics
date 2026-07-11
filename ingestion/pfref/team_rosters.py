@@ -5,6 +5,8 @@ This module provides functions to scrape and manage team rosters from
 pro-football-reference.com, including robust table extraction and parsing.
 """
 
+from __future__ import annotations
+
 import csv
 import os
 import pathlib

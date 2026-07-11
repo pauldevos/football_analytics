@@ -115,6 +115,20 @@ class BraveScraper:
             )
 
         html = self._page.content()
+        # PFR has separately started gating boxscore pages behind a Google
+        # reCAPTCHA that doesn't trip the Cloudflare title check above: the
+        # page title, size, and surrounding site chrome all look normal, but
+        # the scorebox/table content is withheld. A bare "scorebox" substring
+        # check isn't reliable -- that class name shows up in CSS/JS even when
+        # no real scorebox content rendered -- so check for literal box-score
+        # data instead (a stat_name that only exists inside the real,
+        # populated team_stats table).
+        if "recaptcha/api2" in html and "Rush-Yds-TDs" not in html:
+            raise PermissionError(
+                f"reCAPTCHA gate at {url} (no Cloudflare challenge, but core "
+                "content withheld). Visit PFR in Brave to clear it, then re-run."
+            )
+
         # Strip HTML comments so comment-buried tables are visible
         html = html.replace("<!--", "").replace("-->", "")
         return BeautifulSoup(html, "html.parser")

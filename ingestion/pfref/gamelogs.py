@@ -11,6 +11,8 @@ Boxscores saved to: ~/data/pfref/raw/boxscores/{year}/{game_id}.csv
 Pull history is tracked in metadata.json so already-pulled items are skipped.
 """
 
+from __future__ import annotations
+
 import csv
 import pathlib
 

@@ -17,6 +17,8 @@ Usage:
         soup = scraper.fetch_and_sleep(url)
 """
 
+from __future__ import annotations
+
 import asyncio
 import pathlib
 import random

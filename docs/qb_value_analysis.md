@@ -18,7 +18,11 @@ most of their careers.
 
 `notebooks/qb_value_analysis.ipynb`  
 Kernel: `Python (football-analytics)` (`.venv` in project root)  
-Data: `/Users/devos/data/pfref/` — passing stats 1960–2024, team-history
+Data paths (correct as of 2026):
+- Passing stats: `~/data/pfref/raw/season/player/passing/passing_{year}.csv` (1960–2025)
+- Team history: `~/data/pfref/raw/team-history/{Franchise_Name}.csv`
+
+**Column name note**: pre-2003 passing files use `cmp`/`yds`/`team`; post-2003 use `comp`/`yards`/`team_abbrev`. Loading code must handle both.
 
 **AFL note:** Pre-1970 AFL seasons (Namath's 1968 SB III season, Dawson's
 pre-merger Kansas City years) are absent — PFR passing CSVs cover NFL only
@@ -58,25 +62,45 @@ advantage. 188 QBs qualify (4+ seasons as primary starter, 1960–2024).
 
 ## Confirmed Findings
 
-### Correlations (all ~1,700 NFL team-seasons 1960–2024)
+### Correlations (all ~1,800 NFL team-seasons 1960–2025)
 
 | Metric | Pearson r | r² |
 |---|---|---|
 | QB composite rating vs Win% | +0.532 | 0.283 |
 | Defense PPG rank vs Win% | −0.700 | 0.490 |
 
-Defense is **1.3× more predictive** of winning than QB rating.
-A great offense cannot reliably overcome a poor defense.
+Defense is **1.3× more predictive** of winning than QB rating overall — but this varies by era (see decade breakdown below).
 
-### Tier analysis — defense PPG rank
+### Tier comparison — defense PPG rank vs. era-adjusted QB rating
 
-| Tier | n | Avg Win% | P(10+ win pace) | P(Playoffs) | P(Won SB) |
-|---|---|---|---|---|---|
-| Top 10% defense | 211 | 71% | **83%** | 86% | 14.2% |
-| Top 25% defense | 458 | 67% | 72% | 74% | 9.8% |
-| Top 50% defense | 895 | 61% | 54% | 59% | 5.9% |
-| Bottom 50% defense | 888 | 38% | 9% | 14% | 0.5% |
-| Bottom 25% defense | 453 | 31% | **3%** | 5% | 0.2% |
+QB rating tier uses within-season percentile rank to account for era-inflation (a 95 rating in 1970 ≠ 95 in 2010).
+
+| Tier | Defense P(10+W) | Defense P(SB Win) | QB Rating P(10+W) | QB Rating P(SB Win) |
+|---|---|---|---|---|
+| Top 10% | **83%** | 14.2% | 75% | 10.7% |
+| 11–25% | 62% | 6.1% | 61% | 7.5% |
+| 26–50% | 36% | 1.8% | 34% | 2.0% |
+| 51–75% | 16% | 0.7% | 19% | 1.1% |
+| Bottom 25% | **3%** | 0.2% | **6%** | 0.5% |
+
+Key reads:
+- Top-10% defense is 8 percentage points more likely to produce a 10-win season than a top-10% QB.
+- A bottom-25% *defense* is worse than a bottom-25% QB (3% vs 6%): a team can win despite a mediocre QB with a great defense and run game, but almost never overcomes a terrible defense.
+- At 11–25%: QB teams have slightly higher P(SB Win) (7.5% vs 6.1%) — playoff performance may be where QB quality has an edge.
+
+### Decade-by-decade — has defense always been more predictive?
+
+| Decade | n | \|r\| Defense | \|r\| QB Rtg | r² Def | r² QB | Def advantage |
+|---|---|---|---|---|---|---|
+| 1960s | 146 | 0.742 | 0.607 | 0.550 | 0.368 | **1.22×** |
+| 1970s | 268 | 0.761 | 0.654 | 0.579 | 0.427 | 1.16× |
+| 1980s | 280 | 0.635 | 0.533 | 0.403 | 0.284 | 1.19× |
+| 1990s | 291 | 0.743 | 0.632 | 0.551 | 0.399 | 1.17× |
+| 2000s | 318 | 0.687 | 0.646 | 0.472 | 0.417 | 1.06× |
+| 2010s | 320 | 0.699 | 0.651 | 0.489 | 0.424 | 1.07× |
+| **2020s** | 160 | 0.624 | **0.694** | 0.390 | 0.481 | **0.90×** |
+
+The systematic narrowing (1.22× → 1.06× → 0.90×) reflects rule changes (2004 receiver protection, 2023 helmet rule) structurally shifting value from defense to quarterback. In the 2020s, QB rating is now *more* predictive of wins than defense PPG rank — the first time in the dataset.
 
 ### Wins Above Expected — named QBs
 
@@ -103,6 +127,37 @@ Sorted by avg WAE per season. `Avg Def %ile` = 0% is best defense, 100% is worst
 - Brady's +2.09/season looks good but his 20th-percentile defenses already produce ~10 expected wins; he adds ~2 more. Montana is the same archetype: great QB, always great defense.
 - Rodgers: +1.75/season is impressive given consistently 45th-percentile defense (worse than league average). If he'd had Brady's defense, the model would project him averaging ~11.8 wins/season.
 - Dilfer and Doug Williams in the negative — they *underperformed* even with top-quartile defenses. Brady's 2000 BAL defense is the actual GOAT; Dilfer just held the clipboard without fumbling.
+
+### Era-adjusted z-scores (within-season QB rating, yards, TD rate, INT rate)
+
+Career averages sorted by QB-z. INT-z: **positive = good** (fewer INTs per attempt than league average that year). TD-z and Yds-z use TD/att rate and raw yards respectively. Best-season QB-z shows each QB's most dominant single season vs. their contemporaries.
+
+| QB | Yrs | QB-z | Yds-z | TD-z | INT-z | Best Yr | Best QB-z | Best Raw Rtg |
+|---|---|---|---|---|---|---|---|---|
+| **Steve Young** | 9 | **1.63** | 1.11 | 1.25 | 0.61 | 1994 | **3.43** | 111.4 |
+| Joe Montana | 12 | 1.51 | 1.02 | 0.79 | **1.32** | 1989 | 3.27 | 114.8 |
+| Roger Staubach | 8 | 1.41 | 1.21 | 0.92 | 1.11 | 1979 | 2.11 | 90.2 |
+| Peyton Manning | 17 | 1.18 | 1.32 | 1.18 | 0.43 | 2004 | 2.82 | 119.7 |
+| Aaron Rodgers | 16 | 1.10 | 0.54 | 1.14 | 1.21 | 2011 | 2.96 | 122.6 |
+| Drew Brees | 19 | 1.09 | 1.17 | 0.79 | 0.56 | 2011 | 2.04 | 110.5 |
+| Bob Griese | 9 | 1.01 | −0.45 | 1.26 | 0.10 | 1977 | 1.84 | 86.0 |
+| Tom Brady | 21 | 0.99 | 0.95 | 0.82 | 1.15 | 2007 | 2.90 | 116.0 |
+| Dan Marino | 16 | 0.85 | 1.16 | 0.72 | 0.60 | 1984 | 2.79 | 108.5 |
+| Patrick Mahomes | 8 | 0.81 | 1.20 | 0.79 | 0.63 | 2022 | 1.93 | 104.7 |
+| Fran Tarkenton | 18 | 0.74 | 0.59 | 0.36 | 0.72 | 1975 | 1.68 | 90.8 |
+| Bart Starr | 10 | 0.69 | −0.60 | −0.04 | 0.52 | 1966 | 2.09 | 102.1 |
+| Johnny Unitas | 11 | 0.47 | 0.98 | 0.15 | 0.30 | 1964 | 1.44 | 91.8 |
+| John Elway | 16 | 0.26 | 0.41 | 0.10 | 0.39 | 1993 | 1.71 | 94.2 |
+| Terry Bradshaw | 12 | 0.10 | 0.02 | 0.69 | −0.33 | 1978 | 1.43 | 81.5 |
+| Jim McMahon | 9 | −0.21 | −0.56 | −0.33 | −0.06 | 1985 | 0.39 | 77.3 |
+| Trent Dilfer | 7 | −0.80 | −1.41 | −0.60 | −0.50 | 1997 | 0.29 | 80.4 |
+
+**Key z-score reads:**
+- Steve Young (#1 career QB-z, #1 best single season) is severely underrated in GOAT discussions. His 1994 season (z=3.43) was more dominant relative to contemporaries than Rodgers' 2011 (2.96) or Brady's 2007 (2.90).
+- Montana's INT-z (1.32) is the highest in the table — he was more turnover-averse relative to his era than anyone else named, including Rodgers (1.21). His playoff record reflects this.
+- Mahomes' 0.81 QB-z vs his raw 104.7 rating shows modern era compression: more elite QBs today means even extraordinary play looks smaller in z-score terms.
+- Bradshaw's negative INT-z (−0.33) confirms the Steel Curtain narrative: he threw more picks than average for his era.
+- Griese's negative yards-z (−0.45) with a positive QB-z (1.01) = efficiency without volume. Miami's run-first offense kept his attempts down but he maximized each one.
 
 ---
 

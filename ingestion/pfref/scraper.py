@@ -28,6 +28,8 @@ User-agent strings are loaded from pfref/config/user_agent_strings.csv
 or the legacy location (~/.data/config/user_agent_strings.csv).
 """
 
+from __future__ import annotations
+
 import pathlib
 import random
 import time
@@ -108,8 +110,10 @@ class PFRefScraper:
         self._user_agents = self._load_user_agents(config_path)
         self._browser_cookies = self._load_browser_cookies(browser)
 
+        # Match fingerprint to cookie source so Cloudflare TLS check passes
         if _CURL_CFFI_AVAILABLE:
-            self._session = _CfSession(impersonate=impersonate)
+            _impersonate = "firefox135" if (browser or "").lower() == "firefox" else impersonate
+            self._session = _CfSession(impersonate=_impersonate)
         else:
             import requests as _requests
             self._session = _requests.Session()
@@ -136,6 +140,7 @@ class PFRefScraper:
             "chrome": _bc3.chrome,
             "chromium": _bc3.chromium,
             "edge": _bc3.edge,
+            "firefox": _bc3.firefox,
         }
         loader = loaders.get(browser.lower())
         if loader is None:
@@ -147,7 +152,7 @@ class PFRefScraper:
             if "cf_clearance" not in cookies:
                 warnings.warn(
                     "No cf_clearance cookie found in your browser for pro-football-reference.com. "
-                    "Open https://www.pro-football-reference.com in Brave/Chrome, wait for the page "
+                    "Open https://www.pro-football-reference.com in your browser, wait for the page "
                     "to load fully, then re-run. Scraping without it will likely be blocked.",
                     stacklevel=3,
                 )
@@ -155,6 +160,10 @@ class PFRefScraper:
         except Exception as exc:
             warnings.warn(f"Could not load browser cookies ({exc}). Continuing without them.", stacklevel=3)
             return {}
+
+    def close(self) -> None:
+        """No-op — sessions are stateless; included for interface compatibility."""
+        pass
 
     def refresh_cookies(self, browser: str = "brave") -> None:
         """Reload browser cookies mid-session (call this if you start getting 403s again)."""

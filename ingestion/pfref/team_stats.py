@@ -25,6 +25,8 @@ Usage:
     scrape_defense(years=[2025])
 """
 
+from __future__ import annotations
+
 import pathlib
 
 import pandas as pd

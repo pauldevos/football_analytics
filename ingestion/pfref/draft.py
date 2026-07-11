@@ -28,6 +28,8 @@ Usage:
     scrape_draft(years=range(1936, 2026))
 """
 
+from __future__ import annotations
+
 import pathlib
 
 import pandas as pd

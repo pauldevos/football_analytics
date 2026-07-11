@@ -34,11 +34,16 @@ All under `/Users/devos/data/pfref/`:
 | `team-offense/` | Offensive team stats | For opponent quality assessment |
 | `standings/` | Team W-L records | |
 
-Gamebook play-by-play (defender attribution):
+Gamebook play-by-play (defender attribution) — current sources for DPVS:
 - `/Users/devos/data/gamebooks_processed/ocr_cache_mistral/` — Mistral OCR'd text files (hash-keyed)
 - `/Users/devos/data/gamebooks_processed/ocr_named_mistral/` — same, named `YYYYMMDDVIS@HOME.txt`
-- Processed CSVs in `/Users/devos/github/football/gamebooks_research/` (see that repo's CLAUDE.md)
+- Processed CSVs in `/Users/devos/github/football/gamebooks_research/` (see that repo's CLAUDE.md) — superseded pipeline, kept because DPVS still reads its output
 - Teams available: Minnesota Vikings 1967–1981, Pittsburgh Steelers 1969–1973
+
+Note: new gamebook boxscore extraction happens in `gamebooks_boxscores/` against `~/data/gamebooks_v2/`
+(much broader corpus, all teams). Its `boxscore.md` output isn't wired into DPVS or gold yet — that's
+listed as an open gap in the root CLAUDE.md. Don't start new gamebook OCR/extraction work through
+`gamebooks_research/`; it's only referenced here because DPVS's *existing* CSVs came from it.
 
 Media guide data:
 - `/Users/devos/github/football/media_guide_parser/` — extraction pipeline, 982+ pages processed
@@ -72,29 +77,46 @@ PostgreSQL. Schema in `schema/`. Seeded from CSV files above via ETL scripts in 
 `notebooks/qb_value_analysis.ipynb` — tests the hypothesis that Tom Brady's GOAT status
 is inflated by consistently elite defensive support. Full findings in `docs/qb_value_analysis.md`.
 
-**Confirmed headline numbers** (1,700+ NFL team-seasons 1960–2024):
+**Confirmed headline numbers** (1,800+ NFL team-seasons 1960–2025):
 - Defense PPG rank vs Win%: **r = −0.70** vs. QB rating vs Win%: r = 0.53
-- Top-10% defense → 83% chance of 10+ wins; bottom-25% defense → 3%
-- Manning: +2.99 WAE/season at 45th-percentile defense (below avg) — strongest "pure QB" case
-- Brady: +2.09 WAE/season at 20th-percentile defense (top 20%) — great QB, great defense
-- Dilfer: −1.93 WAE/season despite 26th-percentile defense — the canonical clipboard QB
+- Top-10% defense → 83% P(10+W); Top-10% QB rating (era-adj) → 75% P(10+W)
+- Bottom-25% defense → 3% P(10+W); Bottom-25% QB rating → 6% P(10+W)
+- Manning: +2.92 WAE/season at 45th-percentile defense (below avg) — strongest "pure QB" case
+- Brady: +1.94 WAE/season at 20th-percentile defense (top 20%) — great QB, great defense
+- Dilfer: −1.97 WAE/season despite 26th-percentile defense — the canonical clipboard QB
+- (WAE uses isotonic regression model; rolling mean gave Manning +2.99, Brady +2.09 — isotonic corrects for elite-defense expected-win inflation)
+
+**Era-adjusted z-scores** (career QB rating z-score within season, full table in `docs/qb_value_analysis.md`):
+- Steve Young: **1.63 z** (9 seasons; 1994 season z=3.43 is the highest in the dataset)
+- Joe Montana: 1.51 z — also highest INT-z (1.32) among all named QBs (fewest turnovers vs era)
+- Roger Staubach: 1.41 z (only 8 seasons; arguably higher peak than Brady)
+- Brady: 0.99 z — solidly elite but compressed by playing in a QB-rich modern era
+- Mahomes: 0.81 z — modern era compression makes his z lower despite arguably best raw play
+
+**Decade trend** — defense predictive advantage vs QB rating (`|r|` ratio):
+- 1960s: 1.22× | 1970s: 1.16× | 1980s: 1.19× | 1990s: 1.17× | 2000s: 1.06× | 2010s: 1.07×
+- **2020s: 0.90×** — QB rating is now MORE predictive than defense; trend is systematic, not noise
 
 **Planned case studies** (player debates arguing context):
 - Defense-carried SB wins: McMahon/Bears, Dilfer/Ravens, Montana framing
-- Penalized by bad defense: Marino, Rodgers, Drew Brees (45.7 total WAE, often overlooked)
-- Overlooked: Staubach (+2.11 WAE/season), Steve Young, Mahomes
+- Penalized by bad defense: Marino, Rodgers, Drew Brees (+45.0 total WAE over 19 seasons, most underrated by total)
+- Overlooked: Staubach (+2.00 WAE/season), Steve Young (#1 era-adjusted QB-z), Mahomes
 
 ## Document Index
 
 | File | Purpose |
 |------|---------|
 | `docs/analytical_framework.md` | Full DPVS methodology, formulas, component weights |
+| `docs/metrics.md` | TDGS formula, OQA, Team Credit Share, WOWY, era adjustment — metric reference |
+| `docs/framework_decisions.md` | Running log of analytical decisions with evidence (e.g. why equal credit split) |
 | `docs/offensive_oqa_framework.md` | Offensive player OQA: per-player context-adjusted stats (QB/RB/WR/TE), carry-adjusted RB metric, WR #1 identification |
 | `docs/data_sources.md` | Inventory of every data source, columns, coverage, quality notes |
+| `docs/data_pipeline_reference.md` | Quick-start guide for PFR PBP and team history data paths |
 | `docs/schema.md` | PostgreSQL table definitions and relationships |
 | `docs/roadmap.md` | Phased implementation plan |
 | `docs/open_questions.md` | Decisions still to be made, edge cases, research TODOs |
-| `docs/qb_value_analysis.md` | QB value hypothesis, confirmed findings, WAE table, planned case studies |
+| `docs/qb_value_analysis.md` | QB value hypothesis, WAE table, era-adjusted z-scores, decade trend, planned case studies |
+| `docs/qb_era_adjusted_findings.md` | Findings narrative: WAE (isotonic), tier comparison, decade trend, z-score table with key reads |
 
 ## Conventions
 

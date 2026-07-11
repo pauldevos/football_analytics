@@ -263,6 +263,72 @@ signal that's already embedded in `total_credit` and `per_game_credit`.
 
 ---
 
+---
+
+## 9. OQA at Team Level Does Not Improve Win Prediction — Use Raw Z-Score for WAE Baseline
+
+**Question:** Should WAE be computed using a raw z-score baseline or an OQA-adjusted z-score baseline?
+
+**Finding:** OQA-adjusted pts-z is a *worse* predictor of win percentage than raw pts-z.
+
+| Model | R² |
+|---|---|
+| Raw pts-z only | 0.4956 |
+| OQA pts-z only | 0.4619 |
+| Raw pts-z + QB-z | 0.6957 |
+| OQA pts-z + QB-z | 0.6750 |
+
+**Why OQA hurts at the team-season level:** Two reasons.
+
+First, a great defense directly suppresses its opponents' PPG during the season. Even with leave-one-out applied correctly (opponent's season average excludes the current game), the LOO average is still partially suppressed by other good defenses the opponent faced throughout the year. The mutual-influence across a shared schedule means OQA is not fully independent — it partially reflects the quality of other defenses in the league, not just the opponent's inherent offensive strength.
+
+Second — and more practically — there is essentially no scheduling bias in the NFL at the team-season level (correlation between schedule difficulty and win% = **−0.032** across all seasons). Good teams do not systematically face easier or harder offensive schedules than bad teams, which means OQA is not correcting a real bias. Adding it introduces noise without removing a bias that exists.
+
+**BUT: OQA matters for pre-2002 analysis.** The scheduling-bias correlation is era-dependent:
+
+| Era | Corr(oqa_ratio, win%) |
+|---|---|
+| 1960–2001 | **+0.25** (meaningful) |
+| 2002–2024 | −0.05 (noise) |
+
+Before the 2002 scheduling realignment (same-division opponents twice + rotating cross-conference games + same-finisher games), good teams in strong divisions systematically faced tougher offensive opponents. OQA partially corrects for this.
+
+**Conclusion for WAE:** Use **raw pts-z** as the WAE baseline for all eras. Simpler, more predictive, no scheduling bias to correct at the aggregate level.
+
+**Conclusion for DPVS individual scoring:** Use **OQA at the per-game level.** Individual player performance comparisons across games and across teams benefit from OQA because game-level matchups are much more variable than season-level aggregates. Holding the 1984 Dolphins to 7 points is meaningfully different from holding the 1984 USFL champion team to 7 points. The OQA corrects for this at the game level where it is not subject to the same mutual-influence problem.
+
+**LOO validation confirmed:** Mean oqa_ratio = 0.9999 across 29,394 team-game rows. The leave-one-out calculation is mathematically correct.
+
+**Code reference:** `scripts/oqa_wae.py` (scratchpad) → production version pending.
+
+---
+
+## 10. Variance Decomposition — Defense vs QB
+
+**Question:** How much of the variance in team win% is explained uniquely by defense quality vs QB quality?
+
+**Method:** Compute R² for each predictor alone, then compute unique contribution via sequential addition. Dataset: 1,762 team-seasons with both def-z and QB-z available, 1960–2024.
+
+| Model | R² | Unique ΔR² |
+|---|---|---|
+| Intercept only | 0.000 | — |
+| QB-z only | 0.257 | 0.257 |
+| Def pts-z only | 0.496 | 0.496 |
+| QB-z + Def pts-z | 0.706 | — |
+| Defense unique (adding to QB) | — | **+0.449** |
+| QB unique (adding to defense) | — | **+0.210** |
+| Shared variance | — | 0.047 |
+
+**Key finding:** Defense explains roughly twice as much unique variance in wins as QB quality. The shared/overlap component is small (0.047), meaning defense quality and QB quality are largely independent signals.
+
+**Year-over-year stability (r between consecutive seasons):**
+- QB-z stability: **r = 0.421** (more stable than expected)
+- Def pts-z stability: **r = 0.352** (defenses turn over faster — free agency, injury)
+
+Counterintuitive: QBs are more consistent season-to-season than defenses. This has implications for roster construction — investing in a great defense has a higher depreciation rate than investing in an elite QB.
+
+---
+
 ## Open Questions
 
 - **Eller pre-2001 gamebook supplement:** Use era_plays_all.csv to identify Eller's
@@ -272,3 +338,6 @@ signal that's already embedded in `total_credit` and `per_game_credit`.
   partially. Could separate if needed.
 - **Special teams effect on pts_allowed:** Pts include defensive TDs by the opponent
   which may inflate pts_allowed in rare games. Not corrected for.
+- **OQA for pts vs OQA for yds:** Both are computable from per-game scoring.csv (pts)
+  and team_stats.csv "Total Yards" row (yds). Yds OQA may be cleaner for DPVS than
+  pts OQA due to lower non-offensive-TD noise. Not yet tested.

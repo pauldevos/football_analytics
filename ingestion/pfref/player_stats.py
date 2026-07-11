@@ -12,6 +12,8 @@ Data is saved to:
 Pull history is tracked in metadata.json so already-pulled years are skipped.
 """
 
+from __future__ import annotations
+
 import pathlib
 
 import pandas as pd

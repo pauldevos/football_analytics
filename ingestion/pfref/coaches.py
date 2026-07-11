@@ -40,6 +40,8 @@ Usage:
     scrape_coach("ShulDo0")
 """
 
+from __future__ import annotations
+
 import csv
 import pathlib
 from datetime import datetime

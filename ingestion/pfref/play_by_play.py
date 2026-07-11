@@ -16,6 +16,8 @@ Usage:
     scrape_pbp(years=[1988], teams=["phi"])       # only PHI 1988 games
 """
 
+from __future__ import annotations
+
 import csv
 import pathlib
 import re

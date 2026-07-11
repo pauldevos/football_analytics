@@ -20,6 +20,8 @@ Usage:
     print(meta.get_status('passing'))
 """
 
+from __future__ import annotations
+
 import json
 import pathlib
 from datetime import datetime

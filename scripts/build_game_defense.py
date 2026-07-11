@@ -34,6 +34,12 @@ SILVER_DIR     = Path.home() / 'data/silver'
 
 MIN_STAT_EVENTS = 4   # min defensive stat events to qualify as non-starter participant
 
+# Regular-season game counts by era. Games beyond this per (team, season) are playoffs.
+def _reg_season_games(season: int) -> int:
+    if season >= 2021: return 17
+    if season >= 1978: return 16
+    return 14
+
 _OFF_POS = frozenset({
     'QB','RB','FB','HB','TB','WB','WR','FL','SE','OE','TE',
     'T','G','C','OT','OG','OL','LT','RT','LG','RG','K','P','LS',
@@ -282,20 +288,21 @@ def _get_defense_participants(
     """
     parts: dict[str, dict] = {}
 
-    # 1. Named defensive starters
-    def_starts = starters_df[
-        (starters_df['team_abbrev'] == def_abbr) &
-        (~starters_df['pos'].isin(_OFF_POS))
-    ]
-    for _, r in def_starts.iterrows():
-        pid = str(r['pfr_player_id'])
-        parts[pid] = {
-            'pfr_player_id': pid,
-            'player_name':   str(r['player']),
-            'pos':           str(r['pos']),
-            'is_starter':    True,
-            'stat_events':   0,
-        }
+    # 1. Named defensive starters (starters_df may be empty if file was absent)
+    if not starters_df.empty and 'team_abbrev' in starters_df.columns:
+        def_starts = starters_df[
+            (starters_df['team_abbrev'] == def_abbr) &
+            (~starters_df['pos'].isin(_OFF_POS))
+        ]
+        for _, r in def_starts.iterrows():
+            pid = str(r['pfr_player_id'])
+            parts[pid] = {
+                'pfr_player_id': pid,
+                'player_name':   str(r['player']),
+                'pos':           str(r['pos']),
+                'is_starter':    True,
+                'stat_events':   0,
+            }
 
     # 2. Supplement from player_defense.csv
     pdef_file = game_dir / 'player_defense.csv'
@@ -400,7 +407,9 @@ def build(
         for game_dir in game_dirs:
             stats_file    = game_dir / 'team_stats.csv'
             starters_file = game_dir / 'starters.csv'
-            if not stats_file.exists() or not starters_file.exists():
+            # starters.csv is absent for 2001–2018 and pre-1967 — still parse
+            # the game for TDGS; participation falls back to player_defense events
+            if not stats_file.exists():
                 continue
 
             raw = pd.read_csv(stats_file)
@@ -415,7 +424,8 @@ def build(
                 continue
 
             stats       = _parse_team_stats(stats_file)
-            starters_df = pd.read_csv(starters_file)
+            starters_df = pd.read_csv(starters_file) if starters_file.exists() \
+                          else pd.DataFrame()
             vis_score, home_score = _get_game_scores(game_dir)
 
             for (off_side, def_side, off_abbr, def_abbr) in [
@@ -496,7 +506,43 @@ def build(
 
         print(f" → {processed} parsed", flush=True)
 
-    return pd.DataFrame(game_rows), pd.DataFrame(player_rows)
+    game_df   = pd.DataFrame(game_rows)
+    player_df = pd.DataFrame(player_rows)
+
+    # Tag regular-season games. game_id is date-prefixed (YYYYMMDD...) so
+    # sorting chronologically within (season, team) then keeping the first
+    # N entries gives exactly the regular season.
+    #
+    # Guard: AFL teams (pre-1970 merger) often have only their Super Bowl game
+    # in the PFR boxscores; their regular season lived in a separate AFL dataset.
+    # If a team has fewer than half the expected regular-season games, treat all
+    # their games as non-regular-season so they don't corrupt the rs_game_ids set.
+    if not game_df.empty:
+        game_df = game_df.sort_values(['season', 'team', 'game_id'])
+        game_df['game_num'] = game_df.groupby(['season', 'team']).cumcount() + 1
+
+        def _is_regular_season(row) -> bool:
+            reg_n = _reg_season_games(int(row['season']))
+            team_total = int(row['_team_total'])
+            if team_total < reg_n // 2:
+                return False  # sparse data — likely an orphaned playoff appearance
+            return int(row['game_num']) <= reg_n
+
+        game_df['_team_total'] = game_df.groupby(
+            ['season', 'team'])['game_num'].transform('max')
+        game_df['is_regular_season'] = game_df.apply(_is_regular_season, axis=1)
+        game_df = game_df.drop(columns=['game_num', '_team_total'])
+
+    if not player_df.empty and not game_df.empty:
+        # A game is regular season for a player only when BOTH defending teams
+        # agree it's regular season. Use the intersection: game_id must appear
+        # as regular-season in ALL of its game_df rows (both home and vis).
+        all_game_ids     = set(game_df['game_id'].unique())
+        playoff_game_ids = set(game_df.loc[~game_df['is_regular_season'], 'game_id'])
+        rs_game_ids      = all_game_ids - playoff_game_ids
+        player_df['is_regular_season'] = player_df['game_id'].isin(rs_game_ids)
+
+    return game_df, player_df
 
 
 # ── WOWY rollup ───────────────────────────────────────────────────────────────
