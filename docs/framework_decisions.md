@@ -329,6 +329,660 @@ Counterintuitive: QBs are more consistent season-to-season than defenses. This h
 
 ---
 
+## 11. IDI Reweight — TFL Added, FR Dropped (2026-08-21)
+
+**Motivation:** A YoY stability audit of IDI's five raw-count share components (via
+variance-decomposition + career split-half reliability, stripping position-group
+baseline-rate confound, on raw counts normalized per game from
+`~/data/gold/player_season_card.parquet`) found:
+
+| Component | Adjusted split-half r |
+|---|---|
+| TFL | **0.76** (strongest of everything tested — not in IDI's formula at all) |
+| INT | 0.57 |
+| FF | 0.45 |
+| Tackle | 0.61–0.71 (within position_group; from an earlier pass this session) |
+| Sack | 0.28–0.56 |
+| **FR** | **0.22** (closest to pure chance of any component) |
+
+Decision: drop FR entirely (weight → 0), add TFL as a new component, reweight
+proportional to measured reliability.
+
+**New weights** (`_W_BASE` in `dpvs/idi.py`):
+```
+IDI = 0.23·tackle_share + 0.26·tfl_share + 0.16·sack_share
+      + 0.20·int_share + 0.16·ff_share
+```
+`tackle_share` and `tfl_share` are each independently present-or-absent per
+player-season; whichever are missing get dropped from `_W_BASE` and the rest
+renormalize proportionally (`_idi_row()` in `dpvs/idi.py` generalizes the
+old two-tier with/without-tackles pattern to both gated components).
+
+**TFL data sources** (see `dpvs/idi.py` module docstring for full detail):
+- **1967–1977**: `gamebooks_boxscores` repo's own 28-team corpus (real
+  per-game TFL read from rendered gamebook images), combined from its
+  existing `outputs/defensive_full_aggregate_1967_1975.csv` plus a direct
+  parse of its 1976–1977 `boxscore.md` files (136 games; not yet in that
+  repo's own aggregate output as of this addendum). Where corpus coverage
+  for a player-season is a subset of games rather than the full schedule
+  (the large majority — see `tfl_coverage` below), the observed games' TFL
+  rate is used as the season-level share estimate, with both numerator and
+  denominator summed over the same game subset.
+- **1999+**: gold parquet's own `tfl` column (real PFR data; confirmed
+  ~0% populated 1967–1998 in this session's testing).
+- **1978–1998 has no TFL source at all** — a real, currently-unfilled gap
+  (PFR's own `pbp.csv`-derived TFL was evaluated and rejected as a source;
+  see `gamebooks_boxscores/docs/experiments/2026-08-20_pfr_pbp_vs_gamebook_completeness/README.md`
+  — it undercounts sacks by ~20% on verified elite pass-rusher seasons and
+  scrambles tackler credit order relative to the source gamebook).
+
+**Coverage achieved** (`~/data/silver/dpvs_g_player_season.parquet` rebuild,
+1967–2024, 20,541 player-seasons):
+
+| `idi_tfl_source` | Rows | Seasons |
+|---|---|---|
+| `gold_1999plus` | 10,579 | 1999–2024 |
+| `gamebooks_boxscores_partial_imputed` | 2,609 | 1967–1977 |
+| `gamebooks_boxscores_full` (≥13 games observed) | 179 | 1968–1975 |
+| `none` (falls back to the 4-component rebalanced formula) | 7,174 | 1967–1998 |
+
+**Validation — pooled YoY Pearson r, season N vs N+1, OLD weights vs NEW
+weights, both computed without WOWY** (`0.60·TCS_z + 0.40·IDI_z`, same
+pooled-pairs methodology as the earlier WOWY/component tests this session):
+
+| Metric | OLD weights | NEW weights |
+|---|---|---|
+| IDI_z (all seasons pooled, n=14,059 pairs) | 0.386 | **0.343** |
+| Composite no-WOWY (all seasons pooled) | 0.377 | **0.365** |
+
+**Result: the reweight did NOT improve pooled YoY stability — it's a small
+regression on both metrics.** Splitting by era shows why:
+
+| Era | IDI_z OLD | IDI_z NEW |
+|---|---|---|
+| 1967–1977 (gamebooks TFL, mostly partial-imputed small samples) | 0.313 | **0.171** |
+| 1978–1998 (no TFL; only the FR-drop + reweight applies) | 0.442 | **0.388** |
+| 1999–2024 (gold parquet TFL, full-season, real PFR data) | 0.368 | 0.364 |
+
+Two distinct problems, not one:
+1. **1967–1977**: `tfl_share` computed from a handful of observed games (most
+   player-seasons here have `games_observed` in the low single digits) is a
+   noisy share estimate — a player with 1 TFL in 1 observed game can show
+   `tfl_share = 1.0`. This era drags the pooled number down the hardest.
+2. **1978–1998**: no TFL is involved at all here, yet stability still drops.
+   Proportionally redistributing FR's old 0.10 weight across the new base
+   weights (rather than the old ones) shifts relative weight away from sack
+   (moderate reliability) toward FF (lower reliability, 0.45) more than
+   intended — the four-component fallback formula's *internal* proportions
+   changed more than the FR-drop alone would justify.
+3. **1999–2024 (the clean case — full-season, real TFL, no imputation)**
+   shows essentially no change (0.368 → 0.364) despite TFL's 0.76 raw
+   split-half reliability. This suggests `tfl_share` (share of a team's
+   season TFL total, itself a fairly rare event — team totals are often in
+   the 30–40 range) behaves less reliably as a *share* statistic than TFL
+   *rate normalized per game* did in the original component test — the two
+   are not the same measurement, and the share transformation appears to
+   erode most of the raw signal.
+
+**Read: implemented as specified, but not validated as an improvement.**
+Spot checks (J.J. Watt 2012 `idi_z`=3.71 off a 44% team-TFL share; Aaron
+Donald 2018 `idi_z`=4.00, both career-best, plausible seasons) confirm
+nothing is structurally broken — TFL visibly moves rankings in the expected
+direction for known elite TFL producers. But the pooled-r validation this
+session was explicitly asked to run says the reweight, as implemented, is a
+regression on the exact test that motivated dropping FR in the first place.
+Left in place uncommitted per this task's instructions; **recommend further
+tuning before treating this as the production formula** — candidates: a
+minimum-`games_observed` floor before trusting a gamebooks-era `tfl_share`
+row (rather than using any single-game share), and revisiting whether
+`ff_share`'s weight should be capped independent of what's freed up by
+dropping FR, rather than a flat proportional redistribution.
+
+---
+
+## 12. IDI Rebuild v2 — Rate + Volume Empirical-Bayes Components, Era-2 TFL Wired In (2026-08-21)
+
+**Motivation:** §11's TFL/FR reweight regressed pooled YoY stability
+(IDI_z 0.386 → 0.343, composite no-WOWY 0.377 → 0.365) instead of improving
+it. Two root causes were diagnosed there: (1) 1967-1977 gamebooks TFL share
+came from tiny unfloored game samples (1 TFL in 1 observed game → share
+1.0); (2) TFL/INT/FF as *shares of team season total* are noisier than a
+per-game rate, because team-level rare-event totals are themselves small.
+This pass fixes both, plus closes the 1978-1998 TFL gap that §11 left
+entirely empty.
+
+**What changed in `dpvs/idi.py`:**
+
+1. **Completeness-gated TFL, 1967-1977.** `scripts/build_tfl_gated_corpus.py`
+   (new) reuses `gamebooks_boxscores/build_defensive_leaderboards.py`'s own
+   completeness-ratio code directly (team Solo+Ast / opponent snaps ≥ 70%)
+   rather than re-deriving it, applied per game-side across the full
+   1967-1977 corpus (that script's own default range stops at 1974; this
+   pass confirmed 1976 and 1977 resolve cleanly via the same DB ratio and
+   included them). Output: `data_output/tfl_gamebooks_gated_1967_1977.csv`
+   — season/team/player/tfl_sum/games_qualified, un-floored. `idi.py` then
+   applies `MIN_GAMES_QUALIFIED_FLOOR = 4` at load time — below the floor,
+   TFL is simply absent for that player-season rather than forced from a
+   1-2-game sample. A canonical-name-merge bug fix was also needed here:
+   the base surname-merge logic (borrowed from `build_defensive_leaderboards.py`)
+   didn't fold initial+surname variants ("J. Lambert") into their matching
+   full name ("Jack Lambert") — added a same-initial merge rule, confirmed
+   on Jack Lambert 1976 (was fragmented 2+1+0+0 TFL across 4 name variants,
+   now 3 TFL / 10 games under one canonical row).
+
+2. **1978-1998 TFL wired in for the first time** — previously a hard gap
+   (§11: "no TFL source at all"). Source: `gamebooks_boxscores`'
+   `pfr_pbp_defensive_stats_1978_2025.csv` (PFR play-by-play TFL parsing).
+   This is a **confirmed undercount** (~20%+ low on verified elite
+   pass-rusher seasons per that repo's own experiment writeup) — used
+   because it's the only source for this 21-season gap, and every row it
+   supplies is tagged `idi_tfl_source = "pfr_pbp_undercount_1978_1998"` so
+   it is never silently equal-confidence to the other two eras.
+
+3. **Empirical-Bayes shrinkage on a per-game RATE (not share) for TFL,
+   INT, FF:**
+   ```
+   shrunk_rate = (n_obs·observed_rate + k·prior_rate) / (n_obs + k)
+   ```
+   `prior_rate` = the player's own career rate as of the prior season
+   (`pfr_player_id`-keyed cumulative count/games over strictly earlier
+   seasons in the loaded frame) when that history clears
+   `MIN_CAREER_OBS_FLOOR = 8` games, else the season × position_group
+   population rate, else a dataset-wide scalar as a last resort.
+
+   **k-value derivation:** this session's variance decomposition measured
+   overdispersion `phi` (observed variance ÷ pure-chance/Poisson variance)
+   of **2.69 (TFL)**, **1.57 (INT)**, **1.32 (FF)** — TFL closest to a real,
+   repeatable individual signal, FF closest to chance (consistent with why
+   FR, at φ≈1.08, was dropped entirely in §11). `phi − 1` is the "signal
+   over the pure-chance floor," so `k` (prior pseudo-games) was set
+   inversely proportional to it: `k = K0 / (phi − 1)`, with `K0 = 8.0`
+   games (roughly half an NFL season) chosen as a documented reference
+   scale — nothing measured this session pins down the *absolute* scale,
+   only the ordering, so `K0` is a judgment call, not a fitted value.
+   `MIN_CAREER_OBS_FLOOR` was set equal to `K0` so both floors read as one
+   consistent "half-season" judgment rather than two independent numbers.
+
+   | Stat | phi | phi−1 | k = 8.0/(phi−1) |
+   |---|---|---|---|
+   | TFL | 2.69 | 1.69 | **4.73** |
+   | INT | 1.57 | 0.57 | **14.04** |
+   | FF  | 1.32 | 0.32 | **25.00** |
+
+4. **Volume signal alongside the rate:** raw season count is independently
+   z-scored within season × position_group and blended 50/50 with the
+   z-scored shrunk rate: `component_z = 0.5·z(shrunk_rate) + 0.5·z(count)`.
+   50/50 chosen as the direct reading of the brief (both efficiency and
+   volume should matter, neither dominating); nothing measured this
+   session argues for a different split.
+
+5. **Scale-consistency fix (a judgment call beyond the literal brief):**
+   once TFL/INT/FF become z-scored composites (~N(0,1)) instead of shares
+   (~0.0–0.3), blending them against *raw* `tackle_share`/`sack_share` in
+   one weighted sum would let the z-scored components dominate numerically
+   before the stated weights even apply — a scale bug, not a modeling
+   choice. Fix: `tackle_share` and `sack_share` are now **also** z-scored
+   within season × position_group before the blend, so all five IDI inputs
+   share one scale. This mirrors the pattern `dpvs/composite.py` already
+   uses one layer up (z-score TCS/IDI/WOWY, then weight-blend) — now
+   applied inside IDI itself. Consequence: IDI's raw output is already
+   close to standardized, so `composite.py`'s downstream
+   `idi_z = zscore_within(idi)` is now a second, largely idempotent
+   re-standardization — a strictly increasing linear transform within each
+   season × position group, so it preserves this file's within-group rank
+   order exactly. Left in place unchanged (no edit to `composite.py`
+   needed).
+
+**Weights unchanged from §11** (now applied to z-scored components):
+```
+IDI = 0.23·tackle_share_z + 0.26·tfl_component_z + 0.16·sack_share_z
+      + 0.20·int_component_z + 0.16·ff_component_z
+```
+
+**TFL coverage achieved** (`~/data/silver/dpvs_g_player_season.parquet`
+rebuild, 1967–2024, 20,541 player-seasons — same row count as §11's build):
+
+| `idi_tfl_source` | Rows | Seasons |
+|---|---|---|
+| `gold_1999plus` | 10,387 | 1999–2024 |
+| `pfr_pbp_undercount_1978_1998` | 7,038 | 1978–1998 |
+| `gamebooks_boxscores_gated70pct` | 1,218 | 1967–1977 |
+| `none` | 1,898 | 1967–1998 (below floor / no match) |
+
+TFL coverage rose from 65% populated (§11) to **90.8%** populated, while the
+1967-1977 tier shrank from 2,788 rows (§11, unfloored) to 1,218 (floored) —
+the expected trade: fewer 1967-1977 player-seasons get a TFL number, but
+every one that does clears the 70%-completeness / ≥4-game bar instead of
+resting on a 1-2-game sample.
+
+**Validation — pooled YoY Pearson r, season N vs N+1, three-way comparison,
+identical pooled-pairs methodology to §11 (`scripts/yoy_stability_check.py`,
+composite recomputed directly as `0.60·tcs_z + 0.40·idi_z` from saved
+`tcs_z`/`idi_z`, not the WOWY-aware `dpvs_g` column):**
+
+| Metric | Original baseline (pre-§11) | §11 (first rebuild) | **This pass (v2)** |
+|---|---|---|---|
+| IDI_z (pooled, n=14,059 pairs) | 0.386 | 0.343 | **0.490** |
+| Composite no-WOWY (pooled) | 0.377 | 0.365 | **0.411** |
+
+**Both metrics now clear both prior bars** — this is a real improvement,
+not just a recovery back to baseline. Pair count (14,059) matches §11's
+exactly, confirming the same qualification filter (both seasons present,
+non-null `tcs_z`/`idi_z`) is being applied.
+
+By era:
+
+| Era | IDI_z (v2) | Composite (v2) | n pairs |
+|---|---|---|---|
+| 1967–1977 (gamebooks TFL, gated) | 0.349 | 0.493 | 2,165 |
+| 1978–1998 (pbp TFL, undercount — newly added) | 0.493 | 0.424 | 5,175 |
+| 1999–2024 (gold TFL, clean/full-season) | 0.531 | 0.376 | 6,719 |
+
+The 1999-2024 "clean" era — which §11 found essentially flat (0.368 → 0.364
+despite TFL's raw 0.76 split-half reliability) — moved to **0.531**,
+confirming §11's own diagnosis: the *share* transformation, not TFL itself,
+was eroding the signal. Moving to a per-player rate (shrunk + volume-
+blended) recovers it. 1967-1977 (0.349) is still the weakest era but is now
+back above the original pre-§11 baseline (0.313) rather than below it
+(§11: 0.171) — the games-qualified floor plus name-canonicalization fix
+appear to be doing real work, though this era's small qualifying-game
+counts remain its structural limit.
+
+**Spot checks** (`~/data/silver/dpvs_g_player_season.parquet`, all values
+observed directly, not simulated):
+
+| Player | Season | Era/tier | idi_z | dpvs_g | tfl_component_z | Notes |
+|---|---|---|---|---|---|---|
+| J.J. Watt | 2012 | gold_1999plus | 2.98 | 1.65 | **4.00 (capped)** | 20.5-sack season; tfl/sack/tackle components all near or at the ±4σ winsor cap |
+| Aaron Donald | 2018 | gold_1999plus | 3.20 | 1.13 | 4.00 (capped) | ff_component_z also capped at 4.00; dpvs_g held down by a below-average LAR tcs_z that season — expected, not a bug |
+| Luke Kuechly | 2013 | gold_1999plus | 2.13 | 2.11 | 1.79 | int_component_z 4.00 (capped); #1 run_stopper that season |
+| Brian Urlacher | 2005 | gold_1999plus | 2.23 | 2.07 | 3.85 | matches real TFL=17; #1 run_stopper |
+| Mike Singletary | 1985 | pfr_pbp_undercount | 0.61 | 1.63 | 1.28 | modest idi_z appropriately reflects the known Era-2 undercount; dpvs_g still solid on elite Bears tcs_z |
+| Mike Singletary | 1988 | pfr_pbp_undercount | 1.04 | 1.69 | 1.72 | same caveat, slightly stronger season |
+| Joe Greene | 1972 | gamebooks_gated70pct | 2.45 | 1.72 | 3.34 | matches real 9 TFL / 13 qualifying games |
+| Joe Greene | 1974 | gamebooks_gated70pct | 0.34 | 1.51 | 0.26 | correctly modest — real off-year, 4 TFL / 13 games |
+| Jack Lambert | 1976 | gamebooks_gated70pct | 2.29 | 2.17 | 1.19 | #1 run_stopper; TFL total now 3/10 games under one canonical name row (was fragmented 2+1+0+0 before the name-merge fix) — still short of the 5 originally quoted from an earlier, differently-sourced session count, flagged here rather than silently reconciled |
+| Randy Gradishar | 1978 | pfr_pbp_undercount | 1.20 | 1.55 | 1.27 | tackle_share_z is NaN (no comb_tackles/gamebook source that season/team) → `data_confidence = "low"`, weights rebalanced over the other 4 components; int_component_z 3.02 reflects his real 4 INT. Clean fit for the "elite MLB, zero sacks, real TFL+INT production" DPOY-hypothesis pattern — correctly surfaced despite the missing tackle-share input, not treated as a gap |
+
+All nine originally-named players plus Gradishar come out sensibly
+elevated given their known real production, and the Era-2 undercount
+caveat visibly shows up as a smaller (not zero) idi_z for both Singletary
+seasons and Gradishar rather than either an inflated or a missing number.
+
+**Verdict: adopt.** This version clears the YoY-stability bar §11 missed,
+on both metrics, in every era including the newly-added 1978-1998 span —
+not a marginal win but a clear one (IDI_z +27% over original baseline,
++43% over §11). The scale-consistency fix (point 5) was necessary for the
+weights to mean what they say, not optional polish. Remaining honest
+caveats: (a) 1978-1998 TFL rests on a source known to undercount — the
+tier tag makes this legible per-row, but nothing here corrects the
+undercount itself; (b) 1967-1977's stability, while improved, is still the
+softest of the three eras, limited by how few qualifying games most
+player-seasons have even after gating; (c) the career-prior fallback only
+sees prior seasons *within whatever season range is loaded in the same
+run* — a full 1967-2024 rebuild (as done here) gets this right, but a
+narrow `--seasons` slice would under-use career priors it should have
+access to. Left uncommitted per this task's instructions.
+
+**Code/data references:** `dpvs/idi.py` (rewritten), `scripts/build_tfl_gated_corpus.py`
+(new), `scripts/yoy_stability_check.py` (new), `data_output/tfl_gamebooks_gated_1967_1977.csv`
+(new, 9,313 rows).
+
+---
+
+## 13. Roster-Based Name Canonicalization for the 1967-1977 TFL Corpus (2026-08-21)
+
+The user supplied direct evidence that `gamebooks_v2` boxscore.md player
+names are severely format-fragmented corpus-wide — comma order ("Bergey,
+Bill" / "Bill Bergey" / "Bergey"), initials ("Adams, Julius" / "J. Adams"),
+jersey-number-only rows ("56"), sub/role markers ("Athas (sub)"), and
+OCR garbage ("Wilting Heashoff"). §12's own Lambert 1976 spot-check note
+(TFL "now 3/10 games... was fragmented 2+1+0+0 before the name-merge fix")
+had already surfaced the mechanism: `build_tfl_gated_corpus.py`'s
+canonicalization block only merged a bare-surname/single-initial variant
+into a "full" name, and only when EXACTLY ONE such "full" variant existed
+per (season, franchise, surname) — since "Bergey, Bill" and "Bill Bergey"
+both looked like distinct "full" names to that heuristic, the merge
+silently bailed for any surname with more than one full-name-shaped
+variant, which is common.
+
+**Fix:** `gamebooks_boxscores/roster_name_resolver.py` (new,
+`GamebookRosterCanonicalizer`) replaces the text heuristic with a real
+roster lookup — same source `lookup_roster.py` and `parse_pfr_pbp.py`'s
+`RosterResolver` already use (`silver.player_team_seasons_pfr` joined to
+`gold.players`, keyed on the stable `franchise_id`, not alias text). For
+every raw name string in a (season, franchise_id) group: strip trailing
+parenthetical/bracket qualifiers, reorder "Last, First" → "First Last",
+normalize "J.Lambert"/"Johnson B." variants, then match the extracted
+surname against that team-season's real roster. Exactly one roster player
+with that surname → merge every format variant to that player's canonical
+`full_name`/`player_id`, no matter what it looked like. Two or more share
+the surname → disambiguate by first name/initial where unambiguous;
+genuinely ambiguous (e.g. NE 1972 had both Julius Adams and Sam Adams — a
+bare "Adams" row is correctly left unmerged, not guessed). Jersey-number
+rows and unresolved/illegible markers are excluded from the per-player
+numerator entirely (never guessed onto a player) — this doesn't touch the
+completeness-ratio gate itself, since that's computed from
+`parse_boxscore()`'s own `team_total` row or a direct sum over
+`sec['rows']`, upstream of and independent from this per-name step. Names
+with no roster surname match at all (likely real OCR garbage, or a
+genuine roster-coverage gap — see caveat below) are left unmatched under
+their own normalized name rather than force-merged.
+
+`build_tfl_gated_corpus.py`'s canonicalization block (previously lines
+136-184) now calls this resolver instead of the old heuristic; the
+completeness-ratio gating, DB team-stats resolution, and output shape are
+unchanged.
+
+**Corpus-wide match stats** (13,927 raw (season, franchise, name) pairs
+across 1967-1977, one resolution per distinct name per team-season group):
+
+| Outcome | Count | % |
+|---|---|---|
+| matched_unique (one roster surname match) | 12,537 | 90.0% |
+| matched_disambiguated (2+ shared surname, resolved by first name/initial) | 674 | 4.8% |
+| ambiguous (2+ candidates, genuinely unresolvable — left unmerged) | 155 | 1.1% |
+| unmatched (no roster surname match — OCR garbage or roster gap) | 468 | 3.4% |
+| excluded_jersey (jersey-number-only row) | 2 | <0.1% |
+| excluded_marker (unresolved/illegible/unidentified marker) | 91 | 0.7% |
+
+Output row count dropped from 9,313 (old heuristic) to 7,262 (new
+resolver) — fewer, more correct rows, consistent with real fragmentation
+being merged away rather than newly created.
+
+**Jack Lambert 1976 (the flagged discrepancy):** now a single canonical
+row — `tfl_sum=3.0`, `games_qualified=11` (previously 3/10 under the old,
+partially-working merge; the extra qualifying game came from "J.Lambert",
+which the old heuristic's initial-matching branch should have caught but
+a residual no-space "J.Lambert" token-splitting gap prevented — fixed in
+`roster_name_resolver.py`'s normalizer). This is still short of the 5
+TFL quoted from an earlier, differently-sourced session count — that
+discrepancy remains flagged, not silently reconciled; nothing in this
+pass's evidence resolves it (both counts trace to different eras of
+manual boxscore.md reads, not to a mechanical bug found here).
+
+**Bergey/Adams spot checks (the taxonomy examples the user named):** Bill
+Bergey now consolidates cleanly to one row per season across CIN
+(1969-1973) and PHI (1974-1977), correctly kept separate from an
+unrelated Bruce Bergey (KC, 1971) — no cross-player merging. Julius Adams
+(NE, 1971-1977) consolidates "Julius Adams"/"Adams, Julius"/"J. Adams"
+variants into one row per season; a handful of bare "Adams" rows in
+seasons where NE also carried Sam Adams (and briefly Bob Adams) are
+correctly left unmerged rather than guessed onto Julius.
+
+**tackle_share (`dpvs/idi.py`'s other 1967-1977 IDI input) — checked, not
+touched:** `load_all_gamebook_idi()` does NOT read the fragmented
+boxscore.md corpus at all. It reads a separate, older pipeline's output —
+`~/data/gamebooks_processed/teams/{team}/seasons/{season}_defense.csv` —
+which does not exist on this machine (`GAMEBOOK_BASE.exists()` is
+`False`; confirmed directly, and `build_dpvs_g.py`'s own run log prints
+"Gamebook tackle data: 0 player-seasons" both before and after this
+session's changes). So there was no name-fragmentation bug to fix in this
+component — but it does mean `tackle_share_z` for the entire 1967-1977
+era (and MIN through 1981) currently falls through to the PFR/media-guide
+`comb_tackles` layer, which is itself essentially never populated that far
+back, so `tackle_share_z` is NaN for most 1967-1977 player-seasons, not
+just Gradishar's as the §12 note implied. This is a real, pre-existing gap
+— out of scope to fix here (it requires either regenerating the missing
+legacy CSV corpus or wiring IDI to read gamebooks_boxscores' boxscore.md
+data for tackle share the same way this pass just fixed for TFL), but
+worth flagging plainly rather than leaving it looking like an isolated
+Gradishar-only caveat.
+
+**Rebuild + YoY stability re-check** (full `--seasons 1967-2024` rebuild
+of `~/data/silver/dpvs_g_player_season.parquet`, IDI formula/weights/
+shrinkage unchanged from §12, `scripts/yoy_stability_check.py`):
+
+| Version | IDI_z pooled r | Composite (no-WOWY) pooled r |
+|---|---|---|
+| Original baseline | 0.386 | 0.377 |
+| §11 (TFL/FR reweight, no shrinkage) | 0.343 | 0.365 |
+| §12 (rate+volume shrinkage, name-fragmentation bug still present) | 0.490 | 0.411 |
+| §13 (this pass — roster-based name canonicalization) | 0.490 | 0.411 |
+
+The pooled aggregate is unchanged to three decimals (0.490312 vs. the
+prior 0.490; 0.411331 vs. 0.411) — fixing name fragmentation did NOT move
+the corpus-wide YoY-stability metric further, in either direction. The
+1967-1977 era slice on its own: n=2,165 pairs, IDI_z r=0.353, composite
+r=0.493. This is a genuinely flat result, not a disguised regression or
+win — plausible reasons: (1) `MIN_GAMES_QUALIFIED_FLOOR=4` and the
+empirical-Bayes shrinkage already suppress most of the noise a handful of
+fragmented small-sample names would have contributed; (2) the 1967-1977
+era is only ~15% of the 14,059 pooled pairs, so even a real per-era shift
+has limited leverage on the 3-decimal pooled number. What the fix DID
+change is per-player correctness within that era (Lambert, Bergey, Adams,
+and — per the corpus-wide table above — roughly 5% of all 1967-1977 names
+that were previously either mis-merged or wrongly left split), which
+matters for any leaderboard, career-total, or spot-check that reads
+individual player-seasons directly rather than the pooled stability
+statistic.
+
+**Spot checks vs. §12** (all from the freshly rebuilt parquet; `idi_z` /
+`dpvs_g` / `tfl_component_z`):
+
+| Player | Season | §12 idi_z → §13 idi_z | §12 dpvs_g → §13 dpvs_g | Notes |
+|---|---|---|---|---|
+| J.J. Watt | 2012 | 2.98 → 2.98 | 1.65 → 1.65 | 1999+ era, gold `tfl` column — untouched by this fix; unchanged |
+| Aaron Donald | 2018 | 3.20 → 3.20 | 1.13 → 1.13 | same, unchanged |
+| Luke Kuechly | 2013 | 2.13 → 2.13 | 2.11 → 2.11 | same, unchanged |
+| Brian Urlacher | 2005 | 2.23 → 2.23 | 2.07 → 2.07 | same, unchanged |
+| Ray Lewis | 2001 | not in §12's table | idi_z=2.72, dpvs_g=1.97 | 1999+ era, first time checked this pass |
+| Ray Lewis | 2003 | not in §12's table | idi_z=2.43, dpvs_g=1.89 | 1999+ era, first time checked this pass |
+| Derrick Brooks | 2002 | not in §12's table | **not present in the dataset at all** | pre-existing gap in the TCS/participation pipeline for early-2000s TB — not caused by, or fixed by, this pass; flagged, not chased |
+| Mike Singletary | 1985 | 0.61 → 0.62 | 1.63 → 1.63 | 1978-1998 pbp-undercount era, untouched by this fix; noise-level ripple only |
+| Mike Singletary | 1988 | 1.04 → 1.04 | 1.69 → 1.69 | same |
+| Joe Greene | 1972 | 2.45 → 2.36 | 1.72 → 1.68 | 1967-1977 era — small real shift from the corrected TFL corpus |
+| Joe Greene | 1974 | 0.34 → 0.31 | 1.51 → 1.50 | same |
+| Jack Lambert | 1976 | 2.29 → 2.21 | 2.17 → 2.14 | see Lambert discussion above |
+| Randy Gradishar | 1978 | 1.20 → 1.18 | 1.55 → 1.54 | `data_confidence` still `low` (no tackle_share, see above) |
+
+**Verdict:** the name-fragmentation bug was real, corpus-wide (not just
+Lambert), and is now fixed for the TFL corpus specifically — 90% of raw
+names resolved to a unique roster player with no ambiguity, 4.8% more via
+first-name/initial disambiguation, and the remaining ~5% correctly left
+unmerged (ambiguous) or unmatched (garbage/roster-gap) rather than guessed.
+It did not move the pooled YoY-stability number, which is an honest
+negative on that specific question — but that number was never the only
+thing at stake, and per-player correctness genuinely improved. **The
+1967-1977 era of DPVS-G should be considered trustworthy at the
+aggregate/leaderboard level with two flagged, still-open limitations, not
+fully resolved**: (a) `tackle_share_z` is unavailable for most
+1967-1977 player-seasons (see above — a real, separate gap, not a name
+problem); (b) the ~5% of names this pass correctly declined to guess on
+(ambiguous same-surname teammates, unmatched/garbage strings) means a
+small slice of real TFL production in that era is either split across an
+unmerged variant or entirely absent from any player's total — accurate
+by construction (no guessing), but not complete.
+
+**Code/data references:** `gamebooks_boxscores/roster_name_resolver.py`
+(new), `scripts/build_tfl_gated_corpus.py` (canonicalization block
+rewritten), `data_output/tfl_gamebooks_gated_1967_1977.csv` (rebuilt,
+7,262 rows), `~/data/silver/dpvs_g_player_season.parquet` (rebuilt, full
+1967-2024). Left uncommitted per this task's instructions.
+
+---
+
+## 14. 1967-1977 tackle_share Wired In + a Franchise-Code Bug That Was
+    Silently Starving Both TFL and Tackle Coverage (2026-08-21)
+
+§13 checked (but didn't fix) a gap it found while working on TFL:
+`dpvs/idi.py`'s `load_all_gamebook_idi()` reads
+`~/data/gamebooks_processed/teams/{team}/seasons/{season}_defense.csv` —
+a path that does not exist on this machine at all — so `tackle_share_z`
+(IDI's single highest-weighted component, 0.23) has been NaN for
+essentially all of 1967-1977, with IDI's gated-component rebalancing
+silently absorbing the gap by spreading that weight across the other four
+components rather than using real tackle data. This pass fixes it.
+
+**Checked before building anything new:** `gamebooks_boxscores/outputs/`
+and `~/data/gamebooks_v2/defensive_leaderboards.json` both already
+compute season tackle numbers under the same completeness-ratio gate, but
+`defensive_leaderboards.json` truncates to the top-15 tacklers per season
+(per its own module docstring) — not a full population, and a season-wide
+z-score needs the whole population as its mean/sd denominator, not the
+visible top slice. So a full-population build was required.
+
+**`scripts/build_tackle_gated_corpus.py` (new):** a direct structural
+clone of `build_tfl_gated_corpus.py` — same >=70% completeness-ratio gate
+(imported directly from gamebooks_boxscores' `build_defensive_leaderboards.py`,
+not re-derived), same roster-based name canonicalization
+(`roster_name_resolver.py`'s `GamebookRosterCanonicalizer`, reused
+directly), same 1967-1977 range — but sums each qualifying game's
+Solo+Ast instead of TFL. Output: `data_output/tackle_gamebooks_gated_1967_1977.csv`,
+7,262 player-seasons (season, team, player, tackle_sum, games_qualified) —
+same row count as the TFL corpus, as expected (same underlying games/name
+resolution, different summed field).
+
+**Wired into `dpvs/idi.py` following the TFL/INT/FF pattern, not the
+older plain-share treatment:** the task brief asked for "the exact same
+shrinkage/z-scoring/gated-component pattern already established for
+TFL/FF/INT," which for 1967-1977 specifically means the rate+shrinkage+
+volume treatment (`_add_rate_component`: empirical-Bayes-shrunk per-game
+rate, 50/50-blended with a z-scored raw season count), not the plain
+share-then-z-score treatment §12 kept for `sack_share`/PFR `tackle_share`
+in other eras. New `load_gamebook_tackle_gated()` mirrors
+`load_gamebook_tfl()` exactly. `compute_idi()` gained a new highest-
+priority "Layer 0" for tackle_share: for 1967-1977 rows with a hit in the
+gated corpus, `tackle_share_z` is overwritten with the rate+volume
+`tackle_component_z` (all other eras' `tackle_share_z` computation is
+untouched — the scale-consistency point from §12 still holds, since
+z-scoring happens within `season × position_group` either way, so no
+1967-1977 row ever mixes the two treatments). Needed a new `_PHI["tackle"]`
+entry: a quick quasi-Poisson dispersion estimate on the corpus (same
+method-of-moments idea as the TFL/INT/FF phi values — season-pooled
+population rate as mu, Pearson chi-square / (N-1)) gave phi=4.872, higher
+than TFL's 2.69 — i.e. under this same framework, tackle counts carry
+*more* individual-skill signal relative to pure chance than TFL does
+(intuitive: far more observations per game than a rare event), so tackle
+gets `k≈2.07`, the *least* shrinkage of the four rate components.
+
+**Incidental fix, required to run anything:** `merged["_tfl_tier"] = np.nan`
+(pre-existing code, unrelated to this pass) initializes a float64 column
+that later receives string tier labels via `.loc` — this environment's
+pandas raises `LossySetitemError` on that assignment (a real, if latent,
+bug; possibly a pandas-version difference from whenever §12/§13 last ran
+it). Fixed by initializing as `dtype="object"` instead; applied the same
+pattern to the new `_tackle_count`/`_tackle_nobs` columns from the start.
+
+**A second, much bigger bug found via the Willie Lanier spot-check:**
+Willie Lanier came back `tackle_share_z=NaN` for every single season
+despite being in the freshly-built corpus CSV. Root cause: both
+`build_tfl_gated_corpus.py` (§12) and the new `build_tackle_gated_corpus.py`
+wrote each row's team code from `gold.franchises.current_abbreviation`
+(queried directly from the DB), but `dpvs/idi.py` merges this corpus onto
+its frame on the `team` column using gold parquet's own historic/PFR-style
+codes (`_normalize_gold_team`). Those two conventions disagree for **12 of
+28 franchises**: `clt`->`ind`, `crd`->`ari`, `gnb`->`gb`, `kan`->`kc`,
+`nor`->`no`, `nwe`->`ne`, `oti`->`ten`, `rai`->`lv`, `ram`->`lar`,
+`sdg`->`lac`, `sfo`->`sf`, `tam`->`tb` (confirmed directly against
+`gold.franchises`). Every one of those 12 franchises' entire gamebook-era
+TFL and tackle numerator silently never matched onto IDI at all — not
+"NaN because the floor wasn't cleared," but NaN because the merge key
+never had a chance to match, for the Chiefs (Lanier), Raiders (the 1967
+front four topping that season's leaderboard), Rams, Cardinals, Colts,
+Packers, Saints, Patriots, Oilers/Titans, Chargers, 49ers, and Buccaneers,
+for the whole 1967-1977 span. This is what §13's own TFL rebuild had
+already shipped with — undetected because none of its spot-check players
+(Greene/Lambert/Watt/Donald/Kuechly/Urlacher/Singletary/Gradishar) happen
+to play for an affected franchise.
+
+**Fixed in both scripts** (not just the new one, since the bug is
+identical and pre-existing in `build_tfl_gated_corpus.py` too): replaced
+the DB `current_abbreviation` query with a hardcoded `FID_TO_TEAM` map —
+the historic/PFR-style code per franchise, identical to `dpvs/idi.py`'s
+own `_FID_TO_TEAM` (kept as a duplicated constant rather than a
+cross-package import, to avoid a `scripts/` file reaching into `dpvs/`).
+Both corpora rebuilt after the fix; `tfl_gamebooks_gated_1967_1977.csv`
+and `tackle_gamebooks_gated_1967_1977.csv` are unchanged in row count
+(7,262 each — the bug was in the *label*, not which games/players were
+captured) but now actually match onto IDI for the previously-orphaned
+franchises.
+
+**Coverage, 1967-1977 (`tackle_share_z`, 2,958 player-seasons in range):**
+
+| State | Non-null tackle_share_z | % |
+|---|---|---|
+| Before this pass (dead path + PFR fallback only) | 284 | 9.6% |
+| After tackle corpus wired in, before the franchise-code fix | 1,562 | 52.8% |
+| After the franchise-code fix (final) | 2,536 | **85.7%** |
+
+The franchise-code fix alone accounts for more of the coverage gain than
+the tackle corpus itself did — a reminder that a plausible-looking partial
+result (52.8%, already a 5x improvement over baseline) can still be
+hiding a mechanical bug rather than a genuine data-availability ceiling.
+
+**TFL coverage also jumped from the same fix** (not the focus of this
+task, but a direct side effect since both corpora shared the bug):
+`idi_tfl_source == "gamebooks_boxscores_gated70pct"` rows in 1967-1977
+rose from 1,218 (§12/§13's number, corpus-wide) to **2,256** — TFL
+coverage for this era nearly doubled from a bug fix, not new data.
+
+**YoY stability re-check** (`scripts/yoy_stability_check.py`, full
+rebuild each step):
+
+| Version | IDI_z pooled r | Composite (no-WOWY) pooled r | 1967-1977 IDI_z | 1967-1977 composite |
+|---|---|---|---|---|
+| §12 (rate+volume shrinkage) | 0.490 | 0.411 | n/a (not broken out identically) | n/a |
+| §13 (TFL name canonicalization) | 0.490 | 0.411 | 0.353 | 0.493 |
+| This pass, tackle wired in, before franchise-code fix | 0.497 | 0.413 | 0.401 | 0.505 |
+| **This pass, final (franchise-code fix included)** | **0.502** | **0.413** | **0.433** | **0.502** |
+
+Pooled: a modest but real gain (0.490->0.502 IDI_z, +2.4%). Broken out by
+era, the 1967-1977 slice — the one this pass actually touched — moved
+0.353->0.433, a **+23% relative gain**, clearing every prior mark for
+this era including the original pre-§11 baseline (0.313). This matches
+the task's own prediction better than §13 did: §13's fix (fragmented
+names) touched correctness without touching *availability*, and moved the
+pooled number by literally nothing; this pass fixed a genuine
+availability gap (a component that was simply missing for most rows) and
+the stability metric moved accordingly.
+
+**Spot checks** (`~/data/silver/dpvs_g_player_season.parquet`, final
+build; `idi_z` / `dpvs_g` / `tackle_share_z` / `idi_tackle_source`):
+
+| Player | Season | tackle_share_z | idi_tackle_source | Notes |
+|---|---|---|---|---|
+| Joe Greene | 1972 | 0.80 | gamebooks_boxscores_gated70pct | idi_z=2.21, dpvs_g=1.62 — real career-best season, both up from §13 |
+| Joe Greene | 1974 | 0.39 | gamebooks_boxscores_gated70pct | idi_z=0.43 — correctly modest, real off-year |
+| Jack Lambert | 1976 | 2.89 | gamebooks_boxscores_gated70pct | idi_z=2.34, #1 run_stopper; tackle_share_z now among the highest in the dataset, matching his reputation directly rather than via TFL alone |
+| Randy Gradishar | 1978 | NaN | none | correctly out of scope — this fix is 1967-1977 only; 1978 still falls through to the PFR-pbp TFL era with no tackle source, exactly as §13 documented |
+| Randy Gradishar | 1975-1977 | 2.26 / -0.06 / 2.20 | gamebooks_boxscores_gated70pct / gamebooks_boxscores_gated70pct / gamebook_stats_page | now populated for all three in-scope seasons; 1976 dip (4 qualifying games only) is a small-sample artifact, not a real dip — flagged, not smoothed over |
+| Willie Lanier | 1970-1976 | 1.08 to 3.28 (all 7 seasons) | gamebooks_boxscores_gated70pct | THE franchise-code bug's own discovery case — was NaN in every season before the fix despite being in the corpus CSV the whole time; now consistently elevated, matching his real reputation as a premier run-stopping MLB |
+| Nick Buoniconti | 1970-1974 | 0.94 to 2.99 (all 5 seasons) | gamebooks_boxscores_gated70pct | consistently elevated across his full Miami run, as expected for a "tackling machine" |
+| Dick Butkus | 1972-1973 | 1.64 / 0.37 | gamebooks_boxscores_gated70pct | populated for his two qualifying seasons; 1967-1970 remain NaN (games in those seasons don't clear the >=4-qualifying-game floor for him specifically, not a franchise-code issue — Bears already resolved correctly) |
+
+**Verdict:** the 1967-1977 `tackle_share` gap is now genuinely fixed, not
+just partially patched — 85.7% of in-range player-seasons carry a real,
+shrinkage-treated tackle rate instead of falling through to a rebalanced
+IDI formula, and the YoY-stability metric moved by a magnitude consistent
+with fixing a real availability gap (unlike §13, which fixed correctness
+without moving the aggregate number). The franchise-code bug is the more
+consequential finding of this pass: it was silently zeroing out 12 of 28
+franchises' worth of gamebook-sourced TFL *and* tackle data since §12
+first shipped this corpus architecture, would not have been caught by any
+of this session's or §13's spot-check players (all from unaffected
+franchises), and was only surfaced because this task's brief specifically
+asked for a Willie Lanier check. **The 1967-1977 era of DPVS-G should now
+be considered solid enough to treat as finished for the current scope** —
+both of its gamebook-sourced components (TFL, tackle_share) are wired,
+gated, canonicalized, and now correctly matched across the full 28-team
+league, with remaining gaps (the ~14% of player-seasons below the
+4-qualifying-game floor, the ~5% of names §13 correctly declined to
+guess on) understood and flagged rather than hidden. The one thing this
+pass did NOT re-verify is whether some other downstream consumer of
+`tfl_gamebooks_gated_1967_1977.csv` (outside `dpvs/idi.py`) depends on
+its old, buggy team-code convention — worth a quick grep before treating
+that CSV's schema as fully stable.
+
+**Code/data references:** `scripts/build_tackle_gated_corpus.py` (new),
+`scripts/build_tfl_gated_corpus.py` and `dpvs/idi.py` (franchise-code /
+dtype fixes), `data_output/tackle_gamebooks_gated_1967_1977.csv` (new,
+7,262 rows), `data_output/tfl_gamebooks_gated_1967_1977.csv` (rebuilt,
+franchise-code fix only, still 7,262 rows), `~/data/silver/dpvs_g_player_season.parquet`
+(rebuilt, full 1967-2024). Left uncommitted per this task's instructions.
+
+---
+
 ## Open Questions
 
 - **Eller pre-2001 gamebook supplement:** Use era_plays_all.csv to identify Eller's
