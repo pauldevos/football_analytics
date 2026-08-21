@@ -1,12 +1,37 @@
 # QB Composite Metric Research
 
+> **2026-08-21 addendum #2 — game-level WAE + `WAE_Vegas`:** Section 1's "WAE/s" metric below is a
+> **season-level** model — primary QB = most attempts in a team-*season*, whole-season win-loss record
+> attributed to him. This has been superseded by a game-level rebuild (renamed `WAE_DefRank`) plus a
+> new parallel `WAE_Vegas` baseline (Vegas closing line instead of defensive rank as the
+> expected-outcome model). Full methodology and results in `qb_value_analysis.md`'s addendum #2.
+> Relevant to this doc's "YoY stability" framing of WAE/s as "the noisiest per-season signal": the
+> game-level unit is a much larger sample (28,013 QB-game-appearances vs. ~1,900 team-seasons), so a
+> proper YoY-stability re-check at the game level (not done here — out of scope for this pass) would
+> likely show a different noise profile than the season-level r=0.226 cited below; flagging as an open
+> follow-up rather than re-deriving it now. The composite-ranking implications (does this change
+> `qb_goat_rankings.md`'s Top 10) are discussed there, not here.
+
+> **2026-08-21 addendum #1:** `notebooks/qb_value_analysis.ipynb` was found to have two data-loading
+> bugs (a missing column rename that silently NaN'd QB names/starts/ratings for nearly every year
+> outside 2003/2006+, and a wrong `wae_df` column reference that broke the tier-comparison chart),
+> now fixed, plus an extension of coverage from 1960–2025 to 1950–2025. The WAE/s table below and
+> the correlation figure in this section were re-verified against a fresh `--execute` run and updated
+> where they'd moved (mostly small shifts — see inline notes). **The EliteDefZ / OQA-Z v3 section could
+> NOT be re-verified**: no script or notebook implementing it exists anywhere in the current repo (checked
+> `notebooks/`, `scripts/`, `dpvs/`) even though the `player_offense.csv` files it was built from are
+> still present (15,438 files, matches the count cited below). Those numbers predate the two confirmed
+> bugs and were computed by a different, undocumented pipeline than `qb_value_analysis.ipynb` — they are
+> **unverified, not confirmed-accurate**, until that pipeline is rebuilt. Treat the EliteDefZ table and
+> everything downstream of it (the GOAT rankings' EliteDefZ column) accordingly.
+
 Research log for building a historically grounded, context-adjusted QB ranking system. Documents every metric attempted, why it was built, what broke, what the data showed, and where the thinking landed.
 
 ---
 
 ## The Problem
 
-Traditional QB evaluation conflates individual skill with team outcomes. Win totals and rings are the most cited measures even though team defense — not QB play — is the strongest single predictor of winning (r = −0.70 defense PPG vs win%, vs r = +0.53 QB rating vs win%, across 1,800+ team-seasons 1960–2025). The goal is a metric that isolates QB skill from defensive context, era, and opponent quality — and holds up to scrutiny across 65 years of data.
+Traditional QB evaluation conflates individual skill with team outcomes. Win totals and rings are the most cited measures even though team defense — not QB play — is the strongest single predictor of winning (r = −0.70 defense PPG vs win%, vs r = +0.51 QB rating vs win%, across 1,933 team-seasons 1950–2025 — re-verified 2026-08-21, previously reported as +0.53 across 1,800+ team-seasons 1960–2025). The goal is a metric that isolates QB skill from defensive context, era, and opponent quality — and holds up to scrutiny across 75 years of data.
 
 **Test case:** Reggie White aside, the main QB comparison anchoring this work is Manning vs. Brady vs. the field. The central hypothesis: Brady's GOAT reputation is partly a defense artifact.
 
@@ -26,7 +51,7 @@ Traditional QB evaluation conflates individual skill with team outcomes. Win tot
 
 > *"WAE sounds like it should be the cleanest measure but it's actually the messiest per-season signal because it's a 16-game coin flip with the team, not the QB, as the unit of analysis."*
 
-**Why it still belongs:** The noise is at the season level. Sustained WAE over 10+ seasons is a strong signal — the law of large numbers eventually cuts through. Manning at +2.92 over 17 seasons, Mahomes at +3.19 over 7, Brady at +1.94 over 21 are not explained by luck at those sample sizes.
+**Why it still belongs:** The noise is at the season level. Sustained WAE over 10+ seasons is a strong signal — the law of large numbers eventually cuts through. Manning at +2.92 over 17 seasons, Mahomes at +3.20 over 7, Brady at +1.96 over 21 are not explained by luck at those sample sizes.
 
 **Proof via sustained positive rate:**
 | QB | Positive WAE Seasons | Total Seasons | Rate | Expected (random) |
@@ -61,16 +86,17 @@ Traditional QB evaluation conflates individual skill with team outcomes. Win tot
 2024: 15W  ExpW10.9  WAE +4.1   Def 9%ile
 ```
 
-**Full named-QB ranking (career WAE/s, qualifying ≥6 seasons):**
+**Full named-QB ranking (career WAE/s, qualifying ≥6 seasons):** *(re-verified 2026-08-21 against the
+fixed pipeline; only Brady, Marino, and Dilfer shifted, all by ≤0.03 WAE/s — see inline diffs)*
 | QB | Seasons | WAE/s | Total WAE | Avg Def %ile |
 |---|---|---|---|---|
-| Patrick Mahomes | 7 | +3.19 | +22.3 | 29% |
-| Peyton Manning | 17 | +2.92 | +49.6 | 45% |
+| Patrick Mahomes | 7 | +3.20 | +22.4 | 29% |
+| Peyton Manning | 17 | +2.92 | +49.7 | 45% |
 | Drew Brees | 19 | +2.37 | +45.0 | 56% |
-| Tom Brady | 21 | +1.94 | +40.7 | 20% |
-| Aaron Rodgers | 15 | +1.69 | +25.3 | 45% |
-| Dan Marino | 16 | +1.49 | +23.8 | 48% |
-| Trent Dilfer | 7 | −1.97 | −13.8 | 26% |
+| Tom Brady | 21 | +1.96 (was +1.94) | +41.1 (was +40.7) | 20% |
+| Aaron Rodgers | 15 | +1.69 | +25.4 | 45% |
+| Dan Marino | 16 | +1.50 (was +1.49) | +24.0 (was +23.8) | 48% |
+| Trent Dilfer | 7 | −1.96 (was −1.97) | −13.7 (was −13.8) | 26% |
 
 > *"Manning at 45th-percentile defense is the strongest 'pure QB' case — he's adding 3 wins per season with a below-average defense. Brady at 20th-percentile means his baseline is already ~10 expected wins; he adds ~2 more. The isotonic model correctly makes Brady's peak look harder to beat."*
 
@@ -147,6 +173,14 @@ Three tests applied to each stat:
 ---
 
 ## EliteDefZ — Performance vs. Top-25% Defenses
+
+> **Unverified as of 2026-08-21.** No script or notebook building this metric exists anywhere in the
+> current repo — it isn't `qb_value_analysis.ipynb` (which only loads season-level `passing_{year}.csv`
+> files, not the per-game `player_offense.csv` files this section describes) and no other file under
+> `notebooks/`, `scripts/`, or `dpvs/` implements it either. The `player_offense.csv` source data is
+> still on disk (15,438 files, confirmed) but the join/z-score code that turned it into the table below
+> is gone or was never committed. These numbers were not re-run against the fixed pipeline and should
+> not be cited as confirmed-accurate until the pipeline is rebuilt and re-executed.
 
 **Motivation:** All the metrics above measure average performance. The question of whether a QB is truly elite is better answered by what they do against the best defenses. Manning vs. Marino: both have strong career numbers, but how do they hold up when the defense is legitimately good?
 

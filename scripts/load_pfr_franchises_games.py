@@ -17,6 +17,7 @@ import csv
 import os
 import re
 from collections import defaultdict
+from datetime import date
 from pathlib import Path
 
 import psycopg2
@@ -29,11 +30,33 @@ MIN_SEASON = 1967  # Super Bowl Era -- earlier seasons predate usable gamebook c
 
 
 def connect():
-    return psycopg2.connect(dbname=DB_NAME)
+    conn = psycopg2.connect(dbname=DB_NAME)
+    # No role/database-level default points at gold/silver/internal (confirmed via
+    # `SHOW search_path` -- default is just "$user", public), so every statement
+    # below that references an unqualified table name (games, franchises, etc.)
+    # needs this set explicitly per-session, same as football_db's own lookup
+    # scripts and the WAE notebook's football_db query cell.
+    with conn.cursor() as cur:
+        cur.execute("SET search_path TO gold, silver, internal, public")
+    conn.commit()
+    return conn
 
 
 def load_franchises(conn):
-    """Populate franchises + franchise_aliases from the PFR reference CSVs."""
+    """Populate franchises + franchise_aliases from the PFR reference CSVs.
+
+    Guarded: this INSERTs unconditionally (no ON CONFLICT), so re-running the
+    script to backfill game_type/week/round (the actual reason for a re-run --
+    see classify_season_games()) must not re-run this step, or every franchise
+    and alias row would be duplicated. games/team_game_stats already reference
+    the existing franchise_ids, so skip straight to using them if present.
+    """
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM franchises")
+    if cur.fetchone()[0] > 0:
+        print("franchises already populated -- skipping load_franchises()")
+        return {}, {}
+
     abbrev_map_path = PFREF_DIR / "franchise_abbrev_map.csv"
     year_abbrev_path = PFREF_DIR / "franchise_year_abbrev.csv"
 
@@ -205,6 +228,131 @@ def parse_team_stats_row(stat_name, value):
     return {}
 
 
+# Historically-known regular-season game counts per team. No local raw source
+# (game_info.csv, team_stats.csv, pbp.csv, scoring.csv, starters.csv) carries an
+# explicit week/round/game_type field -- checked directly, none of PFR's scraped
+# per-game CSVs under ~/data/pfref/raw/boxscores/ have one. This mirrors the
+# known-working fallback already used by gamebooks_boxscores/parse_pfr_pbp.py's
+# label_game_types_for_year(): sort each franchise's games chronologically and
+# cut at the known regular-season game count for that season/era.
+REGULAR_SEASON_GAMES = {1982: 9, 1987: 15}
+
+
+def regular_season_games(season):
+    if season in REGULAR_SEASON_GAMES:
+        return REGULAR_SEASON_GAMES[season]
+    if season < 1978:
+        return 14  # 1967-1977 (post-merger scheduling through the last 14-game season)
+    if season >= 2021:
+        return 17
+    return 16  # 1978-2020 (minus the two strike-year exceptions above)
+
+
+def classify_season_games(season, season_dir, resolve_franchise):
+    """Returns {game_id_str: {'game_type', 'week', 'round'}} for every game in one
+    season's boxscore directory.
+
+    game_type/round come from date-sorting (see REGULAR_SEASON_GAMES above) --
+    the only reliable signal available locally. week is NOT simply "the team's
+    Nth game" (that undercounts once bye weeks appear, 1990+) -- it's a calendar
+    bucket: the season's earliest regular-season game date anchors week 1, and
+    every other regular-season game is bucketed by whole weeks elapsed since
+    then. This survives byes because a bye just leaves a bucket empty for that
+    team, it doesn't shift anything.
+
+    round is assigned backward from the end of the season: the last cluster of
+    playoff dates (games within ~4 days of each other) is always the Super Bowl,
+    the previous cluster the Conference Championship, then Divisional, then Wild
+    Card -- true regardless of how many rounds existed that era (2 rounds in the
+    pre-1970 merger seasons, up to 4 rounds in the modern era), since the games
+    that decide who plays in the Super Bowl are always the second-to-last date
+    cluster, etc.
+    """
+    games_by_fid = defaultdict(list)  # fid -> [(date, game_id_str)]
+    game_dates = {}  # game_id_str -> date
+
+    for game_dir in sorted(season_dir.iterdir()):
+        game_id_str = game_dir.name
+        m = re.match(r"^(\d{4})(\d{2})(\d{2})", game_id_str)
+        if not m:
+            continue
+        game_date = date(int(m[1]), int(m[2]), int(m[3]))
+
+        team_stats_path = game_dir / "team_stats.csv"
+        if not team_stats_path.exists():
+            continue
+        with open(team_stats_path, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        if not rows:
+            continue
+        home_fid = resolve_franchise(rows[0]["home_abbrev"], season)
+        away_fid = resolve_franchise(rows[0]["vis_abbrev"], season)
+        if home_fid is None or away_fid is None:
+            continue
+
+        games_by_fid[home_fid].append((game_date, game_id_str))
+        games_by_fid[away_fid].append((game_date, game_id_str))
+        game_dates[game_id_str] = game_date
+
+    n_reg = regular_season_games(season)
+    game_type = {}
+    for fid, glist in games_by_fid.items():
+        glist.sort()
+        for i, (d, gid) in enumerate(glist):
+            label = "regular" if i < n_reg else "playoff"
+            if game_type.get(gid) == "playoff":
+                continue  # already flagged playoff by the other side
+            if label == "playoff":
+                game_type[gid] = "playoff"
+            else:
+                game_type.setdefault(gid, "regular")
+
+    week = {}
+    reg_dates = sorted(d for gid, d in game_dates.items() if game_type.get(gid) == "regular")
+    if reg_dates:
+        anchor = reg_dates[0]
+        # Rank by distinct 7-day bucket *that has at least one game somewhere in the
+        # league*, not raw elapsed weeks. A single team's bye leaves its own bucket
+        # empty but other teams still play that week, so it stays a distinct rank --
+        # byes are preserved correctly. A league-wide stoppage (the 1982 strike:
+        # weeks 3-10 canceled entirely, nobody played) leaves buckets with zero games
+        # league-wide, which get skipped rather than inflating week numbers past what
+        # the league's own post-strike schedule (weeks 1-9) actually used.
+        buckets_with_games = sorted({(d - anchor).days // 7 for d in reg_dates})
+        bucket_rank = {b: i + 1 for i, b in enumerate(buckets_with_games)}
+        for gid, d in game_dates.items():
+            if game_type.get(gid) == "regular":
+                week[gid] = bucket_rank[(d - anchor).days // 7]
+
+    round_of = {}
+    playoff_dates = sorted({d for gid, d in game_dates.items() if game_type.get(gid) == "playoff"})
+    if playoff_dates:
+        clusters = [[playoff_dates[0]]]
+        for d in playoff_dates[1:]:
+            if (d - clusters[-1][-1]).days > 4:
+                clusters.append([d])
+            else:
+                clusters[-1].append(d)
+        labels_from_end = ["sb", "conf", "div", "wc"]
+        cluster_label = {}
+        for idx, cluster in enumerate(reversed(clusters)):
+            label = labels_from_end[idx] if idx < len(labels_from_end) else "wc"
+            for d in cluster:
+                cluster_label[d] = label
+        for gid, d in game_dates.items():
+            if game_type.get(gid) == "playoff":
+                round_of[gid] = cluster_label[d]
+
+    return {
+        gid: {
+            "game_type": game_type.get(gid, "regular"),
+            "week": week.get(gid),
+            "round": round_of.get(gid),
+        }
+        for gid in game_dates
+    }
+
+
 def load_games_and_team_stats(conn, resolve_franchise):
     cur = conn.cursor()
     games_inserted = 0
@@ -222,6 +370,8 @@ def load_games_and_team_stats(conn, resolve_franchise):
             continue
         if season < MIN_SEASON:
             continue
+
+        season_classification = classify_season_games(season, season_dir, resolve_franchise)
 
         for game_dir in sorted(season_dir.iterdir()):
             game_id_str = game_dir.name
@@ -260,8 +410,16 @@ def load_games_and_team_stats(conn, resolve_franchise):
                     home_score = int(srows[-1]["home_team_score"])
                     away_score = int(srows[-1]["vis_team_score"])
 
-            game_type = "playoff" if not re.search(r"wk\d", game_id_str) else "regular"
-            # PFR game_ids don't encode week; leave week NULL rather than guess badly.
+            # game_type/week/round: see classify_season_games() above. Was previously
+            # `"playoff" if not re.search(r"wk\d", game_id_str) else "regular"` -- PFR's
+            # raw boxscore-folder game_id (e.g. "199509030atl") never contains "wk\d" at
+            # all, so that regex never matched and every single row silently fell through
+            # to "playoff" with week left NULL. Confirmed against the live DB: 14,016/14,016
+            # rows were game_type='playoff', 0 had a non-null week.
+            classification = season_classification.get(game_id_str, {})
+            game_type = classification.get("game_type", "regular")
+            week = classification.get("week")
+            round_ = classification.get("round")
             # External id (game_id_str) never lives on games itself -- looked up/
             # recorded via internal.game_xref only, same as internal.player_xref.
             cur.execute(
@@ -272,18 +430,23 @@ def load_games_and_team_stats(conn, resolve_franchise):
             if xref_row:
                 game_id = xref_row[0]
                 cur.execute(
-                    "UPDATE games SET home_score=%s, away_score=%s WHERE game_id=%s",
-                    (home_score, away_score, game_id),
+                    """
+                    UPDATE games SET home_score=%s, away_score=%s, game_type=%s, week=%s, round=%s
+                    WHERE game_id=%s
+                    """,
+                    (home_score, away_score, game_type, week, round_, game_id),
                 )
             else:
                 cur.execute(
                     """
                     INSERT INTO games (season, game_date, home_franchise_id,
-                                        away_franchise_id, home_score, away_score, game_type)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                        away_franchise_id, home_score, away_score,
+                                        game_type, week, round)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING game_id
                     """,
-                    (season, game_date, home_fid, away_fid, home_score, away_score, game_type),
+                    (season, game_date, home_fid, away_fid, home_score, away_score,
+                     game_type, week, round_),
                 )
                 game_id = cur.fetchone()[0]
                 cur.execute(
