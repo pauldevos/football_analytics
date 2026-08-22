@@ -983,6 +983,143 @@ franchise-code fix only, still 7,262 rows), `~/data/silver/dpvs_g_player_season.
 
 ---
 
+## 15. Name-Resolver Deep-Dive: Double-Initial Parsing Bug, Leaderboard
+Propagation Gap, and a Manual-Override Mechanism (2026-08-21)
+
+A deep-dive audit of `gamebooks_boxscores/roster_name_resolver.py`'s
+`GamebookRosterCanonicalizer` (the resolver §13/§14 built and this
+pipeline shares with `gamebooks_boxscores/build_defensive_leaderboards.py`)
+against all 13,927 raw name decisions in the current 1967-1977 corpus
+found two concrete, fixable defects plus one still-open gap this pass
+deliberately declined to guess its way past.
+
+**Issue 1 — real parsing bug in `normalize_and_split()`.** No-space
+double-initial names ("B.R.Smith", "D.D.Lewis", "J.T.Thomas",
+"L.C.Greenwood", "A.J.Duhe") were mis-split: the old single-initial-only
+regex (`^([A-Za-z])\.(?=[A-Za-z])`) only inserted a space after the FIRST
+initial, so "B.R.Smith" became "B. R.Smith" — still one glued token — and
+the surname extractor then took `tokens[-1] = "R.Smith"`, lowering to the
+garbage roster key `"r.smith"`. These real, often Hall-of-Fame-caliber
+players fell into `unmatched` even though the roster lookup would have
+succeeded with a correct surname. Fixed with `LEADING_INITIALS_RE`, which
+matches one-or-more glued `<letter>.` groups at the start of the string
+and inserts spaces after all of them, not just the first — verified safe
+against "St.Clair" (a real 2026-08-21 finding: "S" is followed by "t", not
+a period, so the initials regex never starts matching into it). A related
+particle-surname case surfaced by the same fix — "M.St.Clair" splits
+correctly into initial "M." + surname "St.Clair", but football_db's own
+`last_name` convention for "Mike St. Clair" (Cleveland Browns DE,
+1976-79) is `"Clair"`, not `"St. Clair"` — is handled by a narrowly-scoped
+`_strip_glued_particle()` (only "St.", the one particle with real corpus
+evidence; not generalized to "Mc"/"Van"/"De" without evidence). A bonus
+fix rode along: the old code only ever compared a candidate's FIRST
+initial, so "B.R.Smith" on the 1968 Colts (Billy Ray Smith vs Bubba
+Smith — both first names start with "B") was still a false ambiguous
+after the surname fix; a new compound-initials tier (`_name_initials()`)
+compares the full captured initial string ("br") against each
+candidate's real leading-name initials, resolving it uniquely to Billy
+Ray Smith.
+
+Corpus-wide effect (`build_tfl_gated_corpus.py`'s canonicalizer stats,
+identical for the tackle-corpus builder since both share one resolver
+pass): `matched_unique` 12,537→12,543, `matched_disambiguated` 674→677
+(includes the B.R. Smith compound match, 3 raw-name-instances across
+1968-69), `unmatched` 468→461. `tfl_gamebooks_gated_1967_1977.csv` /
+`tackle_gamebooks_gated_1967_1977.csv` row counts dropped 7,262→7,255 —
+expected, not a regression: merging previously-split name variants onto
+one real player reduces the player-season row count by exactly the number
+of now-merged duplicates.
+
+**Issue 2 — propagation gap in `build_defensive_leaderboards.py`.** That
+script had its own, older, weaker surname-merge heuristic (merge a
+bare-surname row into a full-name row only when exactly one distinct
+full-name variant exists for that surname/team-season) instead of using
+the shared resolver — confirmed broken on any case with two full-name-
+SHAPED variants of the same player (e.g. "Bergey, Bill" vs "Bill Bergey"
+both read as "full names" to a token-count check, so they'd never merge).
+Replaced with a direct `GamebookRosterCanonicalizer` import, same pattern
+as `build_tfl_gated_corpus.py` / `build_tackle_gated_corpus.py` — a
+name-resolution swap only, the completeness-ratio gating and
+leaderboard-construction logic are untouched.
+`~/data/gamebooks_v2/defensive_leaderboards.json` regenerated; spot-check
+confirms single consolidated leaderboard entries for Bill Bergey (1973
+CIN, 91 tackles/9 games — one row, not split across "Bergey"/"Bill
+Bergey"), Willie Lanier (1968-1971 KC, one row per season), and Jack
+Lambert (1974 PIT, 139 tackles/16 games — one row, not split across "Jack
+Lambert"/"J. Lambert"). Direct `resolve()` test also confirms both
+"Bergey, Bill" and "Bill Bergey" now normalize to the identical
+`matched_unique` canonical name.
+
+**Issue 3 — manual override mechanism for genuinely irresolvable
+`ambiguous` cases.** Per this project's standing rule ("A name fix needs
+a roster citation... two or more plausible candidates -> flag, don't
+pick one" — `gamebooks_boxscores/CLAUDE.md`), the resolver's `ambiguous`
+bucket (a bare surname shared by 2+ roster players, no first-name hint in
+the raw text) is never guessed algorithmically. `roster_name_overrides.json`
+(new, `gamebooks_boxscores/`) is a small, evidence-required override file
+`GamebookRosterCanonicalizer.resolve()` now checks FIRST, before any of
+its own roster-matching logic — keyed by exact `(season, franchise_id,
+raw_name)`, each entry requires a real, citable `evidence` string (see the
+file's own `_readme` block for the full how-to-add-an-entry guide). Seeded
+with 2 real, evidence-based resolutions (10 entries total — one per
+covered season, since football_db positions can change year to year and
+each season was individually re-verified rather than extrapolated):
+
+  - **"Otto" / Oakland Raiders 1968-1971** → Gus Otto (LB). The other
+    roster candidate, Jim Otto, played Center (offense) every one of
+    those seasons — he structurally cannot appear on this corpus's
+    DEFENSIVE Boxscore table. Corroborated in-corpus: one game
+    (`19691221_wk15_oti_at_rai/boxscore.md`) already carries a
+    human-written row note stating exactly this ("Gus Otto (RLB), not C
+    Jim Otto — only Gus appears in the defensive lineup").
+  - **"Adams" / New England Patriots 1972-1977** → Julius Adams (DE/DT).
+    The other candidate, Sam Adams, played Guard/Tackle (offensive line)
+    every one of those seasons. Corroborated in-corpus: every bare-"Adams"
+    Defensive Boxscore row that also carries a grid position (LDT, RDT,
+    RE, defensive-side "RT") matches Julius Adams's real position, never
+    Sam Adams's; one outlier row already flags itself as "likely bench
+    DL/LB" rather than the offensive guard.
+
+  A third candidate, "Youngblood" / LA Rams 1973-1977 (Jack Youngblood LDE
+  vs Jim Youngblood LB/LLB/MLB), was checked with the same method and
+  deliberately left OUT of the override file: both players are on
+  defense every season, so there is no positional (or other) signal
+  available from football_db alone — this stays `ambiguous` pending
+  someone actually looking at a specific game's page image. The remaining
+  ~146 ambiguous cases (down from 155 pre-fix, 9 resolved by the two
+  overrides above plus the compound-initials fix pulling a couple out via
+  Issue 1) are unresolved pending the same kind of real evidence.
+
+**YoY stability re-check** (`scripts/yoy_stability_check.py`, full
+`build_dpvs_g.py --seasons 1967-2024` rebuild first):
+
+| Version | IDI_z pooled r | Composite (no-WOWY) pooled r |
+|---|---|---|
+| §14 (franchise-code fix, immediately prior state) | 0.502 | 0.413 |
+| **§15, this pass (name-resolver fixes)** | **0.502** | **0.413** |
+
+Flat at 3-decimal precision, as expected: this pass recovers a genuinely
+small number of additional real players (16 raw-name-instances via Issue
+1, 7 via the two Issue-3 overrides, out of 13,927 total decisions) rather
+than changing scoring methodology, so it was never going to move a
+14,059-pair pooled correlation measurably — the point of this pass was
+correctness/completeness at the margin, not a stability-metric win. No
+regression at either the pooled or the (unchanged, not re-run
+individually here) per-era level is expected or was observed in any
+intermediate check.
+
+**Code/data references:** `gamebooks_boxscores/roster_name_resolver.py`
+(parsing fix + override-file wiring), `gamebooks_boxscores/roster_name_overrides.json`
+(new), `gamebooks_boxscores/build_defensive_leaderboards.py` (resolver
+swap), `gamebooks_boxscores/CLAUDE.md` (new Tools-section documentation),
+`data_output/tfl_gamebooks_gated_1967_1977.csv` /
+`data_output/tackle_gamebooks_gated_1967_1977.csv` (rebuilt, 7,255 rows
+each), `~/data/gamebooks_v2/defensive_leaderboards.json` (regenerated),
+`~/data/silver/dpvs_g_player_season.parquet` (rebuilt, full 1967-2024).
+Left uncommitted per this task's instructions.
+
+---
+
 ## Open Questions
 
 - **Eller pre-2001 gamebook supplement:** Use era_plays_all.csv to identify Eller's
