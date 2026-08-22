@@ -33,16 +33,27 @@ Derrick Brooks (4-3 OLB, a much heavier coverage/run-responsibility role).
 
 This is real football domain knowledge, given directly, with responsibility
 splits, expected stat ranges, and named examples per bucket — use this as
-the target taxonomy and validation set for whatever gets built:
+the target taxonomy and validation set for whatever gets built.
+
+**Correction (2026-08-22)**: the classifier built per this doc (see the
+companion `05_RESULTS_position_scheme_classifier_20260822.md`) flagged
+Bobby Wagner as a mismatch against his original placement here under
+"3-4 ILB/MLB" — real data shows 13 of his 14 Seattle seasons labeled
+`'4-3'` (only 2022 shows `'3-4'`). The user confirmed this was their own
+placement error, not a classifier bug: "Wagner could be a 4-3 MLB... I
+think he's a 4-3." Moved to the "4-3 MLB" row below. This is a useful
+example of the validation loop working as intended — a taxonomy generated
+from memory/expertise can still have individual errors, and a data-checked
+classifier is a real way to catch them.
 
 | Scheme/Position | Responsibilities | Sample stat profile (season) | Example players |
 |---|---|---|---|
 | 3-4 NT | 85% run defense, 15% pass rush | 30-65 tackles, 3-5 sacks, 5-10 TFL | Ted Washington, Vince Wilfork, Curley Culp, Casey Hampton, Fred Smerlas, Michael Carter, Bob Baumhower (early NT who also rushed the passer — rare for a 0-technique) |
 | 3-4 DE | 40% run defense, 60% pass rush | 50-70 tackles, 5-10 sacks, 5-10 TFL | J.J. Watt, Bruce Smith, Howie Long, Lee Roy Selmon, Richard Seymour, Justin Smith, Calais Campbell, Elvin Bethea, Art Still, Doug Betters |
 | 3-4 OLB (edge rusher) | 80% pass rush, 15% run defense, 5% coverage | 40-55 tackles, 7-12 sacks, 5-10 TFL | Lawrence Taylor, Terrell Suggs, Kevin Greene, Greg Lloyd, T.J. Watt, Von Miller, Derrick Thomas, Andre Tippett, DeMarcus Ware, James Harrison |
-| 3-4 ILB/MLB | 70% run defense, 10% coverage, 20% pass rush (blitzing) | 80-120 tackles, 3-6 sacks, 5-10 TFL, 2-4 INT | Levon Kirkland, Ray Lewis, Pepper Johnson, Harry Carson, Randy Gradishar, Patrick Willis, Bobby Wagner, Steve Nelson, Sam Mills |
+| 3-4 ILB/MLB | 70% run defense, 10% coverage, 20% pass rush (blitzing) | 80-120 tackles, 3-6 sacks, 5-10 TFL, 2-4 INT | Levon Kirkland, Ray Lewis, Pepper Johnson, Harry Carson, Randy Gradishar, Patrick Willis, Steve Nelson, Sam Mills |
 | 4-3 DE | 70% pass rush, 30% run defense | 50-75 tackles, 5-10 sacks, 5-10 TFL | Myles Garrett, Deacon Jones, Carl Eller, Chris Doleman, Charles Haley, Charles Mann, Jack Youngblood |
-| 4-3 MLB | 60% run defense, 20% coverage, 20% pass rush (blitzing) | 120-150 tackles, 1-2 sacks, 5-10 TFL, 1-3 INT | Bill Bergey, Dick Butkus, Mike Singletary, Willie Lanier, Brian Urlacher, Luke Kuechly, Nick Buoniconti, Tommy Nobis |
+| 4-3 MLB | 60% run defense, 20% coverage, 20% pass rush (blitzing) | 120-150 tackles, 1-2 sacks, 5-10 TFL, 1-3 INT | Bill Bergey, Dick Butkus, Mike Singletary, Willie Lanier, Brian Urlacher, Luke Kuechly, Nick Buoniconti, Tommy Nobis, Bobby Wagner |
 | 4-3 OLB | 50% run defense, 30% coverage, 20% pass rush | 80-120 tackles, 3-5 sacks, 5-10 TFL, 2-5 INT | Derrick Brooks, Lavonte David, Ed McDaniel, Bobby Bell, Jack Ham, Junior Seau, Ted Hendricks, Chuck Howley, Matt Blair, Wilber Marshall |
 
 **Hybrid players**: real, but the exception, not the rule — the user's
