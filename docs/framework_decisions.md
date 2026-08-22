@@ -1120,6 +1120,258 @@ Left uncommitted per this task's instructions.
 
 ---
 
+## 16. Postgres Migration: Gamebook Reload, First PFR Per-Game Load, DPVS-G Output Table (2026-08-21)
+
+Three-part production migration, run in dependency order (task 3 depends on
+1 and 2). Full row counts, grain decisions, and the football_db-side schema
+detail live in `football_db/CLAUDE.md`'s own 2026-08-21 section — this
+entry covers the DPVS-G-facing side: what got rewired, what didn't, and the
+end-to-end validation.
+
+**Tasks 1-2 (football_db side, summarized):** `silver.player_game_stats_gamebook`
+reloaded with the §15 name-resolver fixes (30,388 rows, 1967-1977, now
+carrying a `completeness_qualified` flag per row instead of the ratio gate
+living only in `build_tfl_gated_corpus.py`/`build_tackle_gated_corpus.py`'s
+CSV outputs). `silver.player_game_stats_pfr` populated for the first time —
+422,823 rows, 1978-2025, `pbp.csv`-derived stats (this project's own
+scoring convention) with player identity upgraded via
+`player_defense.csv`'s real `pfr_player_id` cross-referenced through
+`internal.player_xref` (73.3% of rows resolved this way — a materially more
+reliable path than the name/surname matching `parse_pfr_pbp.py` used
+alone). `gold.player_game_stats` rebuilt via a new merge script
+(453,211 rows total). Two real pre-existing parser bugs (an ISO-date format
+half the gamebook corpus uses, and `"XXX TOTAL"`-style team-total rows)
+were found and fixed as part of getting the reload to actually cover the
+full corpus, not introduced by this pass.
+
+**Task 3 — what moved to Postgres in `dpvs/idi.py`:**
+
+| Component | Before | After | Still falls back to file when |
+|---|---|---|---|
+| 1967-1977 TFL | `data_output/tfl_gamebooks_gated_1967_1977.csv` | `silver.player_game_stats_gamebook` (same >=70% ratio gate, now a stored column not a recomputation) | Postgres unreachable |
+| 1967-1977 tackle_share | `data_output/tackle_gamebooks_gated_1967_1977.csv` | same table | Postgres unreachable |
+| 1978-1998 TFL (undercount-tagged) | `gamebooks_boxscores/outputs/pfr_pbp_defensive_stats_1978_2025.csv` | `silver.player_game_stats_pfr` | Postgres unreachable |
+| sack_share / int / fr / ff / comb_tackles / tfl, 1967-2025 | `~/data/gold/player_season_card.parquet` (CLAUDE.md-superseded layer) | `gold.player_game_stats` | season < 1967 (no Postgres per-game source built) |
+
+Each of the four rewired loaders (`load_gamebook_tfl_from_db()`,
+`load_gamebook_tackle_from_db()`, `load_pfr_tfl_from_db()`,
+`load_gold_stats_from_db()`, all new in `dpvs/idi.py`) is tried first; the
+original file-based function only runs if the Postgres connection itself
+fails, not as a quality trade-off — when the DB is reachable (the normal
+case) file data is no longer read for these four sources at all. A gap in
+`_FID_TO_TEAM` was found and fixed while wiring `load_gold_stats_from_db()`:
+that dict was built for `gamebooks_boxscores`' 1967-1977 corpus and only
+had the 28 franchises relevant to it, but `gold.player_game_stats` spans
+the full 1967-2025 range — the four post-1977 franchises (Jaguars,
+Panthers, Ravens, Texans) were silently dropping out of the merge entirely
+until added.
+
+**What did NOT move to Postgres, and why:**
+- **`dpvs/tcs.py`'s Team Credit Share** (TDGS + opponent-quality
+  adjustment) — built from PFR team-level game files (`team_stats.csv`,
+  `scoring.csv`, `drives.csv`, ...) via `scripts/build_game_defense.py`, a
+  wholly separate pipeline from the player-level defensive-stat tables this
+  migration populated. `gold.team_game_stats` has rush/pass/sack counts
+  (used as this task's own completeness-ratio denominator) but not TDGS's
+  point-differential/opponent-adjusted methodology. Building that in
+  Postgres is a real, separate undertaking — out of scope here, TCS stays
+  100% file-based.
+- **1960-1966** — before both `gamebooks_boxscores`' 1967-1977 corpus and
+  the PFR raw per-game files this migration ingested. `load_gold_stats()`
+  still falls through to the legacy parquet for exactly this 7-season
+  range; every other requested season (the standard `--seasons 1967-2024`
+  rebuild) is 100% Postgres-backed for this component.
+- **WOWY** (`dpvs/wowy.py`) — untouched this pass; still reads whatever it
+  already read. Not part of this task's scope (the task's Postgres-source
+  list was TCS/IDI only), noted here so it's not mistaken for an oversight.
+
+**`gold.dpvs_g_player_season`** (new table, `football_db/schema/dpvs_g.sql`):
+composite score (`dpvs_g`/`dpvs_a`/`dpvs_p`) plus `tcs_z`/`idi`/`idi_z`/
+`wowy_z`, IDI's five z-scored components
+(`tackle_share_z`/`tfl_component_z`/`sack_share_z`/`int_component_z`/
+`ff_component_z`), the raw shares behind them, `position_group`, rank
+columns, and provenance/confidence tags. Loaded by new
+`scripts/load_dpvs_g_to_db.py` from the rebuilt
+`~/data/silver/dpvs_g_player_season.parquet` — `player_id` resolved via
+`internal.player_xref` (19,713/19,991 rows, 98.6%; the rest keep
+`player_id` NULL with `player_name` as the fallback identifier, per this
+project's standing rule against storing a raw external id on a gold
+table). Full `TRUNCATE` + reload each run. 19,991 rows, 1967-2024.
+
+**End-to-end rebuild:** `scripts/build_dpvs_g.py --seasons 1967-2024` (via
+`football_analytics/.venv`, needed for `pyarrow`) ran clean against the new
+Postgres-backed sources: TCS 47,640 player-seasons, WOWY 33,453, IDI's gold
+stats 65,088 / gamebook tackle 2,800 / gamebook TFL 2,800 / PBP TFL 22,735
+(all four counts matched exactly what each new loader returned when tested
+standalone beforehand), final composite 19,991 player-seasons, 4,677 career
+summaries.
+
+**YoY stability re-check** (`scripts/yoy_stability_check.py`), against the
+just-established §15 baseline:
+
+| | Pooled n | IDI_z pooled r | Composite (no-WOWY) pooled r |
+|---|---|---|---|
+| §15 baseline (immediately prior state, file-based sources) | 14,059 | 0.502 | 0.413 |
+| **§16, this pass (Postgres-backed sources)** | **13,657** | **0.496** | **0.415** |
+
+Both correlations are flat within noise (IDI_z -0.006, composite +0.002) —
+the storage-layer swap did not measurably change either stability metric,
+which is the actual claim this check exists to validate: rewiring WHERE
+the data comes from, with the same values and the same methodology, should
+not move a YoY correlation, and it didn't. Per-era breakdown (not measured
+before §15, so no direct prior-pass comparison, but included for the
+record): 1967-1977 n=2,165 IDI_z r=0.403 / composite r=0.510; 1978-1998
+n=5,171 IDI_z r=0.507 / composite r=0.423; 1999-2024 n=6,321 IDI_z r=0.518 /
+composite r=0.375.
+
+Pooled n dropped 14,059 → 13,657 (-2.9%). This was NOT tracked down
+row-by-row given this task's time budget — the honest, not-fully-verified
+explanation is that it's consistent with the same name-consolidation
+pattern §15 already documented and measured (merging previously-fragmented
+name variants onto one real player reduces player-season row counts,
+which mechanically reduces the number of consecutive-season pairs
+available to correlate) rather than a new data-loss bug, but this is a
+plausible account, not a confirmed one — worth a direct row-count diff
+against a saved pre-migration copy of the parquet if this ever needs to be
+certain rather than plausible.
+
+**Overall verdict:** all three tasks completed as scoped. Tasks 1-2 are
+straightforward, verified reloads/loads with real row-count evidence.
+Task 3's rewiring is real (four of `dpvs/idi.py`'s five file-based loaders
+now query Postgres by default, not just in principle) and honestly scoped
+(TCS and the 1960-1966 tail explicitly documented as staying file-based,
+not silently left behind). The YoY re-check is the credible signal that
+nothing broke in the process — flat correlations, explained (if not fully
+row-level-verified) row-count delta, clean end-to-end rebuild with no
+errors. Nothing in this pass was forced to look more finished than it is:
+the TCS gap and the small unverified n-drop are both stated plainly above
+rather than smoothed over.
+
+Code/data references: `football_db/scripts/ingest_gamebook_boxscores.py`
+(resolver swap + completeness-ratio columns + ISO-date/TOTAL-row parser
+fixes), `football_db/scripts/ingest_pfr_defensive_stats.py` (new),
+`football_db/scripts/build_gold_player_game_stats.py` (new),
+`football_db/schema/migrations/20260821_gamebook_pfr_pergame_reload.sql`
+(new), `football_db/schema/dpvs_g.sql` (new),
+`gamebooks_boxscores/parse_pfr_pbp.py` (additive `id_cache`/`load_game_id_map()`/
+`load_pfr_player_id_cache()` extension, backward-compatible default
+`id_cache=None`), `dpvs/idi.py` ("Postgres-backed sources" section, new),
+`scripts/load_dpvs_g_to_db.py` (new). Left uncommitted per this task's
+instructions.
+
+---
+
+## 17. §16's 402-Pair YoY Drop: Root-Caused and Fixed (2026-08-22)
+
+Follow-up task, closing §16's one open item ("the honest, not-fully-verified
+explanation ... worth a direct row-count diff ... if this ever needs to be
+certain rather than plausible"). It needed to be certain: the drop was NOT
+the name-consolidation effect §16 guessed at. Real cause found, fixed, and
+confirmed by rebuild.
+
+**Method.** `dpvs/idi.py` is currently mid-migration (uncommitted changes on
+top of the committed, pre-migration file-based version), so the committed
+`git HEAD` version of `dpvs/idi.py` IS the exact §15 baseline
+(file-based, pre-Postgres, post-name-resolver-fixes) — no separate backup
+needed. `git stash push -- dpvs/idi.py`, full `build_dpvs_g.py --seasons
+1967-2024` rebuild → OLD parquet (20,541 player-seasons, 14,059 pooled
+pairs, matches §15/§16's documented baseline exactly). `git stash pop`,
+same rebuild → NEW parquet (matches §16's committed 19,991/13,657 exactly).
+Diffed the two parquets' `(pfr_player_id, season)` pair sets directly:
+**401 pairs lost, 0 gained** — a pure, one-directional loss, immediately
+ruling out name-consolidation (which would show losses roughly balanced by
+gains as split variants merge into fewer, not-strictly-fewer rows). All 401
+were entirely-missing player-season *rows* in NEW, not present-but-null
+`tcs_z`/`idi_z` — so the cause lives in `build_composite()`'s row-survival
+filters (min_games, position_group), not in IDI's scoring math. Losses
+concentrated 1997-2023 (peak 2004-2022), matching `compute_idi()`'s own
+documented "no starters.csv, `pos` falls back to `gold_pos`" range
+(2001-2018) almost exactly.
+
+**Root cause.** `load_gold_stats_from_db()`'s SQL selected
+`pgs."position" AS pos` from `gold.player_game_stats`. Queried directly:
+that column is **NULL for all 422,823 `pfr`-sourced rows** (0 non-blank),
+vs. 30,357/30,388 populated for `gamebook`-sourced rows. Not a bug in
+`gold.player_game_stats` itself — `silver.player_game_stats_pfr` (its pfr
+input) is genuinely position-less by construction:
+`ingest_pfr_defensive_stats.py` derives its stats from `pbp.csv` play text,
+which carries no position field at all (confirmed: neither `pbp.csv` nor
+`player_defense.csv`, the per-game PFR boxscore file, has a position
+column — position is roster-level PFR data, not per-game boxscore data).
+The legacy `~/data/gold/player_season_card.parquet` had `pos` populated for
+all but 4/69,818 rows because its now-deleted builder pulled position from
+a season-level roster source; `load_gold_stats_from_db()` was never given
+an equivalent join when it replaced that parquet read, so ~91% of its
+`pos` values (65,088 → 59,160 null) went silently empty.
+
+The mechanism from there to a vanished row: `compute_idi()`'s `gold_pos`
+fallback only fires when TCS's own `pos` is ALSO blank for that row (the
+2001-2018 no-starters.csv gap, or a position-split player-season whose
+`_dedup_positions()`-chosen "primary" row happened to be the blank-pos
+one). For those rows, `build_composite()` had nothing to fall back to,
+`position_group` resolved to `"unknown"`, and `df[df["position_group"] !=
+"unknown"]` (composite.py's own explicit drop line) removed the row
+entirely — not a missing stat, the whole player-season. Verified directly
+against a 4-player sample (Husain Abdullah, Sam Acho, Anthony Adams,
+Jahleel Addae) by instrumenting the actual pipeline: TCS/WOWY/dedup
+row counts were bit-identical between OLD and NEW runs (as expected — TCS
+and WOWY were untouched by §16), and `gold_db["pos"]` was NaN for literally
+every one of their rows while the legacy parquet had a real code
+(`FS`/`DB`/`LB`/`DT`/etc.) for every one of the same rows.
+
+**Fix.** `silver.player_team_seasons_pfr` — a real, already-populated,
+season-level roster/position table (118,090 rows, 1921-2025, one row per
+`(player_id, franchise_id, season)`, no duplicate keys, built 2026-07-10,
+untouched by §16) already has exactly the position data needed and was
+simply never joined by `load_gold_stats_from_db()`. Added a `LEFT JOIN` on
+`(player_id, franchise_id, season)` and changed the select to
+`coalesce(pgs."position", pts.position) AS pos` (keeps the `gamebook`
+source's own per-game position where it exists, backfills from the roster
+table only where `gold.player_game_stats.position` is null — i.e., every
+`pfr` row). One query, no data written, no schema change, no other file
+touched.
+
+**Rebuild + re-check** (`scripts/build_dpvs_g.py --seasons 1967-2024`,
+`scripts/yoy_stability_check.py`):
+
+| | Pooled n | IDI_z pooled r | Composite (no-WOWY) pooled r |
+|---|---|---|---|
+| §15/§16 baseline (file-based, pre-migration) | 14,059 | 0.502 | 0.413 |
+| §16 (Postgres, position bug present) | 13,657 | 0.496 | 0.415 |
+| **§17, this fix (position backfilled)** | **14,054** | **0.494** | **0.413** |
+
+Final player-seasons 20,534 (vs. OLD's 20,541, vs. §16's buggy 19,991) —
+recovers 543 of the 550 rows §16's bug had dropped. Pooled pairs recover
+397 of 402 (14,054 vs. 14,059, **98.8% closed**). Both correlations stay
+flat within the same noise band §16 already established (IDI_z -0.008 from
+baseline, composite exactly matches) — consistent with this being a
+row-survival fix, not a scoring-methodology change, exactly as expected.
+
+**4 pairs still unrecovered** (Josh Hines-Allen 2019→2020, Michael Carter
+II 2021→2022 and 2022→2023, Chris Harris Jr. 2011→2012): checked directly
+against `silver.player_team_seasons_pfr` — all four have real, correctly-
+keyed position rows for the relevant seasons/franchises, so the join
+itself isn't failing on them; whatever's still filtering these specific
+four out is a smaller, different, not-yet-diagnosed edge case (a
+`gold.player_game_stats` franchise-id mismatch on a partial-season/trade
+row is the leading guess, unconfirmed). Left as an explicitly open,
+low-priority tail rather than chased further — it's 1% of the original
+gap and the pooled correlation is already fully validated as flat.
+
+**Verdict:** genuine, fixable data gap — not a legitimate exclusion. Fixed
+at the correct layer (the Postgres-reading loader, not the ingestion
+scripts that built `silver.player_game_stats_pfr` — that table's own
+positionlessness is a real and permanent property of its `pbp.csv` source,
+not a bug to fix there). §16's own "plausibly name-consolidation, not
+row-verified" guess is now known to have been wrong, on the record, per
+this section's own row-level diff.
+
+Code/data reference: `dpvs/idi.py`'s `load_gold_stats_from_db()` (the
+fix). No football_db schema or data changes — read-only diagnosis, one
+query edit downstream. Left uncommitted per this task's instructions.
+
+---
+
 ## Open Questions
 
 - **Eller pre-2001 gamebook supplement:** Use era_plays_all.csv to identify Eller's

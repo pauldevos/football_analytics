@@ -161,6 +161,18 @@ _FID_TO_TEAM: dict[int, str] = {
     32: "min", 27: "nor", 23: "nwe", 17: "nyg", 19: "nyj", 31: "oti",
     15: "phi", 29: "pit", 24: "rai", 25: "ram", 9: "sdg", 28: "sea",
     1: "sfo", 7: "tam", 12: "was",
+    # 2026-08-21 additions: the original 28-entry map above was built for
+    # gamebooks_boxscores' 1967-1977 corpus, which never needed these four
+    # genuinely-new-since-1977 franchises (not relocations of an existing
+    # code the way LAC/LAR/LVR/IND are -- see _GOLD_TO_PGD above, which
+    # already uses 'rav'/'htx' for exactly this reason). Needed now because
+    # load_gold_stats_from_db() aggregates gold.player_game_stats across the
+    # full 1967-2025 range, which does include them. franchise_id values
+    # confirmed directly against gold.franchises.
+    18: "jax",  # Jacksonville Jaguars (expansion 1995)
+    22: "car",  # Carolina Panthers (expansion 1995)
+    26: "rav",  # Baltimore Ravens (relocated Cleveland Browns lineage, 1996) -- distinct from clt/ind
+    30: "htx",  # Houston Texans (expansion 2002) -- distinct from oti/ten
 }
 
 # ── empirical-Bayes shrinkage / gating constants (2026-08-21, see module
@@ -330,6 +342,244 @@ def load_all_gamebook_idi(
     return pd.concat(frames, ignore_index=True)
 
 
+# ── Postgres-backed sources (2026-08-21 task-3 rewiring) ────────────────────
+#
+# football_db now has real per-game data behind three of this file's four
+# file-based loaders: silver.player_game_stats_gamebook was reloaded this
+# session with the same roster-based name resolver + completeness-ratio gate
+# GAMEBOOK_TFL_GATED_CORPUS/GAMEBOOK_TACKLE_GATED_CORPUS were already built
+# from (see football_db/scripts/ingest_gamebook_boxscores.py), and
+# silver.player_game_stats_pfr was populated for the first time (previously
+# EMPTY) with the same pbp.csv-derived, per-game data PBP_TFL_CORPUS was
+# built from (see football_db/scripts/ingest_pfr_defensive_stats.py). Both
+# tables carry the SAME underlying values as their CSV counterparts (same
+# ratio gate, same undercount tier tags) — this is a storage-layer swap, not
+# a methodology change. gold.player_game_stats (the reconciled merge of
+# both) additionally now covers 1967-2025 for sack/int/fr/ff/comb_tackles/
+# tfl, letting load_gold_stats() move off the legacy, CLAUDE.md-superseded
+# ~/data/gold/player_season_card.parquet for that whole range too.
+#
+# Each function below queries Postgres first; on ANY connection/query
+# failure it prints a warning and falls back to the original file-based
+# loader, so a machine without football_db reachable still builds (just
+# back on file data, same as before this rewiring). This is a genuine
+# fallback for unavailability, not a silent quality trade-off — when
+# Postgres IS reachable (the normal case), file data is never used for
+# these four sources again.
+#
+# NOT rewired: dpvs/tcs.py's Team Credit Share (TDGS + opponent-quality
+# adjustment) has no Postgres equivalent at all -- it's built from PFR
+# team-level game files (team_stats.csv, scoring.csv, drives.csv, ...) via
+# scripts/build_game_defense.py, a completely different pipeline from the
+# player-level defensive-stat tables this session populated. gold.team_game_stats
+# has rush/pass/sack counts (used as this task's own completeness-ratio
+# denominator) but not TDGS's point-differential/opponent-adjusted scoring
+# methodology. Building that in Postgres is a real, separate undertaking,
+# out of this task's scope -- TCS stays 100% file-based. Similarly, seasons
+# 1960-1966 (before gamebooks_boxscores' 1967-1977 corpus and before PFR's
+# raw per-game files) have no Postgres source at all and always fall
+# through load_gold_stats_from_db() to the legacy parquet for that narrow
+# range, by design, not as an unhandled gap.
+
+import sys as _sys  # noqa: E402
+
+_FOOTBALL_DB_SRC = Path.home() / "github" / "football" / "football_db" / "src"
+if str(_FOOTBALL_DB_SRC) not in _sys.path:
+    _sys.path.insert(0, str(_FOOTBALL_DB_SRC))
+
+
+def _pg_conn():
+    """Returns a football_db connection, or None if unreachable (caller
+    falls back to file-based loading — see section docstring above)."""
+    try:
+        from football_db.db import get_connection  # noqa: PLC0415
+        return get_connection()
+    except Exception as e:  # noqa: BLE001 -- deliberately broad: any failure means "use the file fallback"
+        print(f"  [idi] Postgres unavailable ({e}) — falling back to file-based source")
+        return None
+
+
+def load_gamebook_tfl_from_db() -> pd.DataFrame | None:
+    """Postgres equivalent of load_gamebook_tfl() (file version, below) --
+    same >=70pct completeness-ratio gate (now stored per-row as
+    completeness_qualified on silver.player_game_stats_gamebook itself
+    rather than recomputed from boxscore.md text), same
+    MIN_GAMES_QUALIFIED_FLOOR application at load time, same output shape.
+    Returns None (not an empty frame) on connection failure, so the caller
+    can distinguish "use the file fallback" from "DB reachable, genuinely
+    no qualifying rows"."""
+    conn = _pg_conn()
+    if conn is None:
+        return None
+    try:
+        df = pd.read_sql("""
+            SELECT g.season AS season, gb.franchise_id AS franchise_id,
+                   p.full_name AS player, sum(gb.tfl) AS tfl_count, count(*) AS n_obs
+            FROM silver.player_game_stats_gamebook gb
+            JOIN gold.games g ON g.game_id = gb.game_id
+            JOIN gold.players p ON p.player_id = gb.player_id
+            WHERE gb.completeness_qualified = true
+            GROUP BY g.season, gb.franchise_id, p.full_name
+        """, conn)
+    finally:
+        conn.close()
+    df = df[df["n_obs"] >= MIN_GAMES_QUALIFIED_FLOOR].copy()
+    df["team"] = df["franchise_id"].map(_FID_TO_TEAM)
+    df = df.dropna(subset=["team"]).copy()
+    df["tfl_tier"] = "gamebooks_boxscores_gated70pct"
+    df["tfl_count"] = df["tfl_count"].fillna(0)
+    return df[["season", "team", "player", "tfl_count", "n_obs", "tfl_tier"]]
+
+
+def load_gamebook_tackle_from_db() -> pd.DataFrame | None:
+    """Postgres equivalent of load_gamebook_tackle_gated() (file version,
+    below) -- direct structural mirror of load_gamebook_tfl_from_db()."""
+    conn = _pg_conn()
+    if conn is None:
+        return None
+    try:
+        df = pd.read_sql("""
+            SELECT g.season AS season, gb.franchise_id AS franchise_id,
+                   p.full_name AS player,
+                   sum(coalesce(gb.solo_tackle, 0) + coalesce(gb.ast_tackle, 0)) AS tackle_count,
+                   count(*) AS n_obs
+            FROM silver.player_game_stats_gamebook gb
+            JOIN gold.games g ON g.game_id = gb.game_id
+            JOIN gold.players p ON p.player_id = gb.player_id
+            WHERE gb.completeness_qualified = true
+            GROUP BY g.season, gb.franchise_id, p.full_name
+        """, conn)
+    finally:
+        conn.close()
+    df = df[df["n_obs"] >= MIN_GAMES_QUALIFIED_FLOOR].copy()
+    df["team"] = df["franchise_id"].map(_FID_TO_TEAM)
+    df = df.dropna(subset=["team"]).copy()
+    df["tackle_tier"] = "gamebooks_boxscores_gated70pct"
+    return df[["season", "team", "player", "tackle_count", "n_obs", "tackle_tier"]]
+
+
+def load_pfr_tfl_from_db() -> pd.DataFrame | None:
+    """Postgres equivalent of load_pbp_tfl() (file version, below) --
+    silver.player_game_stats_pfr covers 1978-2025 (not just 1978-1998, but
+    filtered to that range below since 1999+ TFL comes from load_gold_stats
+    instead, matching the file version's own filter)."""
+    conn = _pg_conn()
+    if conn is None:
+        return None
+    try:
+        df = pd.read_sql("""
+            SELECT season, franchise_id, p.full_name AS player,
+                   sum(pfr.tfl) AS tfl_count, count(*) AS n_obs
+            FROM silver.player_game_stats_pfr pfr
+            JOIN gold.players p ON p.player_id = pfr.player_id
+            WHERE pfr.season BETWEEN 1978 AND 1998 AND pfr.game_type = 'regular'
+            GROUP BY season, franchise_id, p.full_name
+        """, conn)
+    finally:
+        conn.close()
+    df["team"] = df["franchise_id"].map(_FID_TO_TEAM)
+    df = df.dropna(subset=["team"]).copy()
+    df["tfl_tier"] = "pfr_pbp_undercount_1978_1998"
+    df["tfl_count"] = df["tfl_count"].fillna(0)
+    return df[["season", "team", "player", "tfl_count", "n_obs", "tfl_tier"]]
+
+
+def load_gold_stats_from_db(seasons: list[int]) -> pd.DataFrame | None:
+    """Postgres equivalent of load_gold_stats() (file version, below) for
+    the sub-range of `seasons` covered by gold.player_game_stats
+    (1967-2025 -- both silver sources combined). Seasons outside that range
+    (pre-1967) are NOT included in the returned frame; the caller
+    (load_gold_stats(), wrapping this function) fills those in from the
+    legacy parquet so the combined result still covers every requested
+    season."""
+    conn = _pg_conn()
+    if conn is None:
+        return None
+    try:
+        # pgs."position" is NULL for every row sourced from
+        # silver.player_game_stats_pfr (422,823/422,823 rows -- pbp.csv, its
+        # stat source, carries no position field at all; confirmed 2026-08-22
+        # while diagnosing the §16 YoY pooled-pair drop, see
+        # docs/framework_decisions.md). It's only ever populated for the
+        # 'gamebook' source (30,357/30,388). Backfill from
+        # silver.player_team_seasons_pfr -- a real, already-populated,
+        # season-level roster/position table (118,090 rows, 1921-2025, no
+        # dup (player_id, franchise_id, season) keys) this query simply
+        # never joined against -- rather than leaving 1978-2025 rows
+        # position-less. Without this, any player-season whose TCS-side
+        # "pos" is also blank (the 2001-2018 no-starters.csv gap, or a
+        # position-split row whose dedup-chosen "primary" happened to be the
+        # blank-pos one) falls to position_group="unknown" in
+        # composite.py's build_composite() and is DROPPED from the final
+        # table entirely -- not merely missing a stat, the whole
+        # player-season disappears. This was the entire cause of §16's
+        # 14,059->13,657 pooled YoY pair drop (401/402 pairs, zero gained,
+        # concentrated 1997-2023 -- exactly this table's absence, not any
+        # roster/resolver issue).
+        df = pd.read_sql("""
+            SELECT g.season AS season, pgs.franchise_id AS franchise_id,
+                   p.full_name AS player_name, pgs.player_id AS player_id,
+                   coalesce(pgs."position", pts.position) AS pos,
+                   count(DISTINCT pgs.game_id) AS g,
+                   sum(coalesce(pgs.sack, 0)) AS sk,
+                   sum(coalesce(pgs.def_int, 0)) AS int,
+                   sum(coalesce(pgs.fr, 0)) AS fr,
+                   sum(coalesce(pgs.ff, 0)) AS ff,
+                   sum(coalesce(pgs.comb_tackle, 0)) AS comb_tackles,
+                   sum(coalesce(pgs.tfl, 0)) AS tfl
+            FROM gold.player_game_stats pgs
+            JOIN gold.games g ON g.game_id = pgs.game_id
+            JOIN gold.players p ON p.player_id = pgs.player_id
+            LEFT JOIN silver.player_team_seasons_pfr pts
+                   ON pts.player_id = pgs.player_id
+                  AND pts.franchise_id = pgs.franchise_id
+                  AND pts.season = g.season
+            WHERE g.season = ANY(%(seasons)s)
+            GROUP BY g.season, pgs.franchise_id, p.full_name, pgs.player_id,
+                     coalesce(pgs."position", pts.position)
+        """, conn, params={"seasons": list(seasons)})
+    finally:
+        conn.close()
+    if df.empty:
+        return df
+    df["team"] = df["franchise_id"].map(_FID_TO_TEAM)
+    df = df.dropna(subset=["team"]).copy()
+    # A player can have multiple `position` strings across a season's games
+    # (subs, mid-season position notes) -- collapse to one row per
+    # (season, team, player_name), keeping the most-frequent position and
+    # summing everything else. This mirrors load_gold_stats()'s own
+    # dup-collapse step for relocated franchises appearing twice.
+    df = (
+        df.sort_values("g", ascending=False)
+        .groupby(["season", "team", "player_name"], as_index=False)
+        .agg(player_id=("player_id", "first"), pos=("pos", "first"),
+             g=("g", "sum"), sk=("sk", "sum"), int=("int", "sum"), fr=("fr", "sum"),
+             ff=("ff", "sum"), comb_tackles=("comb_tackles", "sum"), tfl=("tfl", "sum"))
+    )
+    df = _compute_gold_shares(df)
+    keep = ["season", "team", "player_id", "player_name", "pos", "g", "sk", "int", "fr", "ff",
+            "comb_tackles", "tfl", "sack_share", "pfr_tackle_share", "pfr_tackle_source", "tackle_source"]
+    df["tackle_source"] = "footballdb_gold_pergame"
+    return df[[c for c in keep if c in df.columns]].copy()
+
+
+def _compute_gold_shares(df: pd.DataFrame) -> pd.DataFrame:
+    """Team-total sack_share / pfr_tackle_share, factored out of
+    load_gold_stats() so both the parquet path and the new DB path
+    (load_gold_stats_from_db()) apply the identical share formula."""
+    team_totals = df.groupby(["season", "team"], as_index=False).agg(
+        team_sk=("sk", "sum"), team_comb_tkl=("comb_tackles", "sum"))
+    df = df.merge(team_totals, on=["season", "team"], how="left")
+    denom_sk = df["team_sk"].replace(0, np.nan)
+    df["sack_share"] = (df["sk"] / denom_sk).clip(0, 1)
+    meaningful = df["team_comb_tkl"] >= 50
+    df["pfr_tackle_share"] = np.where(
+        meaningful, (df["comb_tackles"] / df["team_comb_tkl"].replace(0, np.nan)).clip(0, 1), np.nan)
+    if "pfr_tackle_source" not in df.columns:
+        df["pfr_tackle_source"] = df.get("tackle_source", pd.Series("footballdb_gold_pergame", index=df.index))
+    return df
+
+
 # ── TFL raw-count loaders (2026-08-21 rebuild — three eras, all counts not
 #    shares; see module docstring point 1) ──────────────────────────────────
 
@@ -339,8 +589,13 @@ def load_gamebook_tfl() -> pd.DataFrame:
     (GAMEBOOK_TFL_GATED_CORPUS), floor-filtered at MIN_GAMES_QUALIFIED_FLOOR.
 
     Returns: season, team, player, tfl_count, n_obs, tfl_tier.
-    Empty DataFrame (with a warning) if the corpus file isn't present.
+    2026-08-21: tries Postgres first (load_gamebook_tfl_from_db()) --
+    see the "Postgres-backed sources" section above. Empty DataFrame
+    (with a warning) if neither Postgres nor the corpus file is available.
     """
+    db_df = load_gamebook_tfl_from_db()
+    if db_df is not None:
+        return db_df
     if not GAMEBOOK_TFL_GATED_CORPUS.exists():
         print(f"  [idi] WARNING: {GAMEBOOK_TFL_GATED_CORPUS} not found — "
               f"run scripts/build_tfl_gated_corpus.py first. 1967-1977 TFL "
@@ -362,8 +617,13 @@ def load_gamebook_tackle_gated() -> pd.DataFrame:
     load_gamebook_tfl(). See docs/framework_decisions.md §14.
 
     Returns: season, team, player, tackle_count, n_obs, tackle_tier.
-    Empty DataFrame (with a warning) if the corpus file isn't present.
+    2026-08-21: tries Postgres first (load_gamebook_tackle_from_db()) --
+    see the "Postgres-backed sources" section above. Empty DataFrame
+    (with a warning) if neither Postgres nor the corpus file is available.
     """
+    db_df = load_gamebook_tackle_from_db()
+    if db_df is not None:
+        return db_df
     if not GAMEBOOK_TACKLE_GATED_CORPUS.exists():
         print(f"  [idi] WARNING: {GAMEBOOK_TACKLE_GATED_CORPUS} not found — "
               f"run scripts/build_tackle_gated_corpus.py first. 1967-1977 "
@@ -387,8 +647,13 @@ def load_pbp_tfl() -> pd.DataFrame:
     flag it rather than treat it as equal-confidence to the other two eras.
 
     Returns: season, team, player, tfl_count, n_obs, tfl_tier.
-    Empty DataFrame (with a warning) if the corpus file isn't present.
+    2026-08-21: tries Postgres first (load_pfr_tfl_from_db()) -- see the
+    "Postgres-backed sources" section above. Empty DataFrame (with a
+    warning) if neither Postgres nor the corpus file is available.
     """
+    db_df = load_pfr_tfl_from_db()
+    if db_df is not None:
+        return db_df
     if not PBP_TFL_CORPUS.exists():
         print(f"  [idi] WARNING: {PBP_TFL_CORPUS} not found — "
               f"1978-1998 TFL will be unavailable this build.")
@@ -419,9 +684,21 @@ def load_gold_stats(seasons: list[int]) -> pd.DataFrame:
     (primarily 2001+, plus media-guide-patched seasons for earlier years).
     Gold team codes are uppercase (MIN, PIT); we lowercase them to match
     gamebook convention.
+
+    2026-08-21: seasons within Postgres's now-populated range (1967-2025)
+    are served by load_gold_stats_from_db(); any remaining requested
+    seasons (only 1960-1966 in practice) fall back to this legacy parquet
+    read, so the returned frame always covers every season requested --
+    see the "Postgres-backed sources" section above for why 1960-1966
+    can't be moved off the parquet yet.
     """
+    db_df = load_gold_stats_from_db(seasons)
+    file_seasons = seasons if db_df is None else sorted(set(seasons) - set(db_df["season"].unique()))
+    if not file_seasons:
+        return db_df
+
     df = pd.read_parquet(GOLD_PARQUET)
-    df = df[df["season"].isin(seasons)].copy()
+    df = df[df["season"].isin(file_seasons)].copy()
     # Normalize gold team codes → franchise codes used in player_game_defense
     df["_raw_team"] = df["team_pfref"].str.lower()
     df["team"] = df.apply(
@@ -480,7 +757,13 @@ def load_gold_stats(seasons: list[int]) -> pd.DataFrame:
         "sack_share",
         "pfr_tackle_share", "pfr_tackle_source", "tackle_source",
     ]
-    return df[[c for c in keep if c in df.columns]].copy()
+    file_df = df[[c for c in keep if c in df.columns]].copy()
+    if db_df is None or db_df.empty:
+        return file_df
+    # Combine Postgres-backed seasons (1967-2025) with whatever legacy
+    # parquet seasons were actually requested (only 1960-1966 in practice
+    # -- see this function's docstring).
+    return pd.concat([db_df[[c for c in keep if c in db_df.columns]], file_df], ignore_index=True)
 
 
 # ── z-score / empirical-Bayes helpers ────────────────────────────────────────
