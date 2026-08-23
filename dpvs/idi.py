@@ -1,9 +1,9 @@
 """
 Individual Disruption Index (IDI) — Layer 2 of DPVS-G.
 
-IDI measures a player's individual defensive disruption relative to their
-season × position_group peers, across five components: tackle share, TFL,
-sack share, INT, FF.
+IDI measures a player's individual defensive disruption relative to the
+WHOLE LEAGUE each season (2026-08-22 §20: no longer position-relative —
+see below), across six components: tackle share, TFL, sack, INT, FF, FR.
 
 2026-08-21 reweight (TFL added, FR dropped — see docs/framework_decisions.md
 §11 for the full YoY-stability evidence trail that motivated this).
@@ -83,14 +83,40 @@ together:
      preserved exactly by that second pass) and left in place unchanged
      rather than touching composite.py.
 
-  Base weights (all five components available) — UNCHANGED from the
-  2026-08-21 reweight, now applied to z-scored quantities instead of
-  shares:
-    IDI = 0.23·tackle_share_z + 0.26·tfl_component_z + 0.16·sack_share_z
-          + 0.20·int_component_z + 0.16·ff_component_z
+  Base weights (all five components available) — REPLACED 2026-08-22 (see
+  docs/framework_decisions.md, the section right after §17). The §11
+  weights (0.23/0.26/0.16/0.20/0.16) were a negotiated judgment call, never
+  actually derived from measured evidence. These are derived from real
+  event VALUE (expected-points swing to the defense, from PFR's own
+  exp_pts_before/exp_pts_after, 1978-2025 — see
+  docs/deferred/04_event_value_results_20260822.md), proportional for the
+  four genuine disruption events (TFL/sack/INT/FF), with tackle handled as
+  a separate small fixed participation weight rather than value-proportional
+  (its own measured value is NEGATIVE, -0.36 EP — a "routine" tackle
+  follows a play the offense already gained on, by construction; see the
+  _W_BASE definition below for the full reasoning):
+    IDI = 0.10·tackle_share_z + 0.113·tfl_component_z + 0.179·sack_component_z
+          + 0.367·int_component_z + 0.242·ff_component_z
+
+  sack_share_z REMOVED 2026-08-22, replaced with sack_component_z (this is
+  a second, follow-on change from the same day, after the weight
+  re-derivation above): the user's own reasoning is that sack_share
+  unfairly penalizes a player for playing alongside other good pass
+  rushers ("someone who got a lot of sacks for a team that got a lot of
+  sacks is still important... it shouldn't be based on the skill level of
+  a teammate"), and — unlike tackles — sacks are NOT prone to this
+  project's confirmed media-guide-style inflation problem (they're an
+  official, honestly-scored stat), so a raw count is trustworthy as-is.
+  sack_component_z gets the exact same rate+shrinkage+volume treatment
+  (_add_rate_component) as TFL/INT/FF, using sack's own measured
+  phi=2.126 (k≈7.10) — previously it was the only one of the five still
+  computed as a raw team-share z-score; that team-share computation
+  (`sack_share`, `team_sk`) is now removed entirely, not just
+  superseded — no code path in this file computes a sack team-share
+  anymore.
 
   tackle_share_z and tfl_component_z remain independently gated per
-  player-season (may be unavailable); sack_share_z / int_component_z /
+  player-season (may be unavailable); sack_component_z / int_component_z /
   ff_component_z are treated as always-computable (gold parquet covers
   1960+ for sack/int/ff) and default to a neutral 0.0 z when a row is
   missing from gold parquet entirely — the same fallback semantics the
@@ -99,9 +125,95 @@ together:
   for a row get dropped from the weight dict and the rest renormalize
   proportionally (see _idi_row / _GATED_COMPONENTS).
 
+  PRE-2001 TACKLE OPPORTUNITY-RATIO NORMALIZATION, added 2026-08-22 (same
+  day, third change): season tackle TOTALS (unlike sacks) are a confirmed,
+  real inflation risk pre-2001 — some team scoring staffs/media guides
+  padded season tackle counts (flagship case: Randy Gradishar's 1978 media
+  guide credits him 286 solo tackles in 16 games, implausible at any era).
+  A player's SHARE of the team total is presumably far less distorted by
+  this than the raw total, so compute_idi()'s "Layer 2b" keeps each
+  player's real solo/assist share but replaces the raw, unreliable
+  team-season total feeding tackle_share/tackle_share_z with an
+  opportunity-anchored "adjusted expected" total: real defensive
+  opportunities that team-season faced (opponent's rush attempts + pass
+  completions + times sacked + fumbles, from gold.team_game_stats — same
+  concept gamebooks_boxscores' own completeness-ratio gate already uses,
+  extended with fumbles here) times a stable empirical ratio measured from
+  2001-2025 (the one era this project trusts as officially, reliably
+  scored — solo_ratio ≈0.86, stable; ast_ratio ≈0.17-0.19 in the
+  2001-2010 window actually applied, though the full 2001-2025 pool drifts
+  upward to ≈0.25 by the mid-2020s — see
+  scripts/build_tackle_opportunity_ratio.py's module docstring for the
+  full stability report and why the early-window ratio, not the full
+  pool, is what's actually applied backward onto 1967-2000). Only touches
+  Layer 2 rows (season < 2001) — Layer 0's gated 1967-1977 gamebook corpus
+  already has its own, differently-validated per-game quality control and
+  is untouched; 2001+ is the reference era itself, untouched by
+  construction. See load_tackle_opportunity_adjustment() and
+  TACKLE_OPPORTUNITY_ADJ_CORPUS above.
+
 See docs/framework_decisions.md §12 for the k-value derivation, the
-validation re-run, and the honest verdict on whether this version clears
-the YoY-stability bar the §11 attempt missed.
+validation re-run, and the honest verdict on whether that version cleared
+the YoY-stability bar the §11 attempt missed; §18 for the 2026-08-22
+event-value-driven reweight, and §19 for the sack rate+shrinkage
+removal-of-team-share and the pre-2001 tackle opportunity-ratio
+normalization.
+
+2026-08-22 (§20, same day, this docstring's CURRENT state) — POSITION-
+RELATIVE Z-SCORING REMOVED for all six count-based components, weights
+RE-PICKED from user-given ranges (not event value or phi this time). User's
+own words, verbatim, the direct trigger: "There shouldn't be ANY z-score by
+position at all for these stats. 18 sacks is better than 12 sacks, end of
+story, I don't care if it's the Kicker getting the sacks. We do care about
+the event value though, again, Sacks, TFL, Tackles in order." Motivating
+bug: Donnie Shell (S, PIT 1978) drew sack_component_z=4.0 (the winsorized
+max) because the "coverage" position group's sack-rate population variance
+is tiny (safeties almost never sack the QB) -- his one rare sack looked
+like an extreme outlier only because the comparison population was wrong,
+not because the event itself was extraordinary league-wide.
+
+  1. `_add_rate_component`'s rate_z/count_z z-scoring, and the direct
+     tackle_share_z z-score in compute_idi(), all changed from grouping by
+     ["season", "_idi_pos_group"] to ["season"] ONLY -- every component now
+     compares a player's rate/count against the WHOLE league that season,
+     all positions pooled, not just same-position peers. The empirical-
+     Bayes shrinkage PRIOR (used when a player lacks career history) still
+     falls back to a season × position_group population rate -- that's a
+     centering/expectation choice (what should we expect from a player at
+     this position, absent more data), not the comparison mechanism the
+     bug was in, so it's deliberately left alone. dpvs/composite.py's own
+     OUTER idi_z z-score (still season × position_group, by design) is
+     out of scope for this pass and untouched -- it's a coarser
+     "how does this player's overall blended value compare to positional
+     peers" comparison on the final composite score, a different question
+     from whether one raw component's internal z-score is well-conditioned.
+
+  2. FR (fumble recovery) REINSTATED as a sixth component, reversing §11's
+     drop-entirely decision, at the user's explicit direction. §11's
+     reason for dropping it (phi=1.08, closest of any component to the
+     pure-chance floor -- almost no repeatable individual skill) still
+     stands and is handled correctly this time: FR gets the same
+     rate+shrinkage+volume treatment as TFL/INT/FF/sack
+     (_add_rate_component), with k≈100.0 (extreme shrinkage, by far the
+     largest k of any component) so a player's FR component leans almost
+     entirely on the population/career prior rather than one season's
+     recovery luck -- not a flat, unadjusted count.
+
+  3. New weights, picked directly from the user's own stated ranges
+     (explicitly a starting point for further tuning, not a final
+     answer) -- see the `_W_BASE` comment in this file for the exact
+     reasoning behind each choice within its range:
+       Sack 0.30, TFL 0.25, Tackle 0.20, FF 0.125, INT 0.12, FR 0.12
+       (sum 1.115) -> normalized ÷1.115 -> 0.269 / 0.224 / 0.179 / 0.112 /
+       0.108 / 0.108. This REPLACES §18's event-value-derived weights
+       (0.10/0.113/0.179/0.367/0.242) entirely -- value-per-event is no
+       longer what sets these weights; the user's own explicit ranked
+       ranges are.
+
+See docs/framework_decisions.md §20 for the full validation: Donnie Shell
+1978 before/after, the 2024 PIT@DEN real-boxscore hand-traced fixture
+examples, YoY stability before/after, and the Joe Greene vs. Jack Lambert
+1974 recheck.
 """
 
 from __future__ import annotations
@@ -148,6 +260,19 @@ PBP_TFL_CORPUS = (
 GAMEBOOK_TACKLE_GATED_CORPUS = (
     Path(__file__).resolve().parent.parent
     / "data_output" / "tackle_gamebooks_gated_1967_1977.csv"
+)
+
+# Pre-2001 tackle opportunity-ratio normalization table (2026-08-22, see
+# module docstring's "Layer 2b" description in compute_idi() and
+# scripts/build_tackle_opportunity_ratio.py, which builds this file).
+# Columns: season, team, opportunities, adj_expected_solos, adj_expected_ast
+# -- one row per 1967-2000 team-season. Covers the range football_db's
+# gold.team_game_stats has opponent-play data for (1967-2025, per that
+# repo's own documented scope); 1960-1966 has no row and simply falls
+# through this layer unchanged (see load_gold_stats()'s docstring).
+TACKLE_OPPORTUNITY_ADJ_CORPUS = (
+    Path(__file__).resolve().parent.parent
+    / "data_output" / "tackle_opportunity_adjusted_1967_2000.csv"
 )
 
 # franchise_id -> pgd team code, for PBP_TFL_CORPUS's franchise_id column.
@@ -213,10 +338,45 @@ MIN_CAREER_OBS_FLOOR = 8.0
 # tackle counts have far more observations per game than a rare event like
 # TFL/sack/INT, so less of the season total is noise) -> tackle gets the
 # LEAST shrinkage of the four rate components.
-_PHI: dict[str, float] = {"tfl": 2.69, "int": 1.57, "ff": 1.32, "tackle": 4.872}
+#
+# "sack" phi added 2026-08-22 (see docs/framework_decisions.md next section
+# after §17 -- the IDI weight-revisit / event-value pass): sack never got
+# this treatment before (it was still a raw team-share z-score, unlike
+# TFL/INT/FF). Computed with the SAME method as the numbers above --
+# season-pooled population rate as mu, Pearson chi-square/(N-n_seasons),
+# UNFLOORED, all positions pooled (matching how TFL/INT/FF's own pooled
+# phis were computed, confirmed by reproducing tackle's 4.872 exactly with
+# this method restricted to its own gated corpus) -- over the full
+# football_db gold.player_game_stats-derived frame (65,282 player-seasons,
+# 1967-2025, >=70%-completeness-gated for the 1967-1977 portion, same gate
+# scripts/stat_noise_skill_rating_analysis.py's load_game_level() already
+# applies): phi_sack = 2.126. This sits between FF/INT (near-chance) and
+# TFL (2.69) -- real, moderate signal, consistent with
+# docs/deferred/02_RESULTS_stat_noise_skill_rating_analysis.md's
+# position-split finding (sack phi 1.85-1.90 for the two pass-rushing
+# groups, 1.16 for coverage -- "moderate... clearly below tackle," matching
+# the user's own "more additive"/coverage-dependent intuition that started
+# this whole revisit). k derived the same way as the other three.
+# "fr" phi added 2026-08-22 (see docs/framework_decisions.md §20 -- the
+# position-relative-z-scoring removal / absolute-value-weighting pass):
+# FR is REINSTATED as an IDI component this pass at the user's explicit
+# request, reversing §11's drop-entirely decision. §11's own reason for
+# dropping it stands unchanged -- phi_fr=1.08 (pooled, all positions,
+# same method as the other four -- see
+# docs/deferred/02_RESULTS_stat_noise_skill_rating_analysis.md) is the
+# closest of any of these five stats to the pure-chance floor of 1.0, i.e.
+# almost no repeatable individual skill signal. Rather than treat that as
+# a reason to exclude it again, it's used exactly as intended: extreme
+# shrinkage (k = 8.0/(1.08-1.0) = 100.0 -- 100 prior-weighted pseudo-games,
+# far above any other stat's k) so a player's FR component is overwhelmingly
+# pulled toward the population/career prior rather than any single season's
+# recovery luck, while still getting the same rate+shrinkage+volume
+# treatment (_add_rate_component) as TFL/INT/FF/sack -- not a flat
+# unadjusted count, per the user's own instruction.
+_PHI: dict[str, float] = {"tfl": 2.69, "int": 1.57, "ff": 1.32, "tackle": 4.872, "sack": 2.126, "fr": 1.08}
 _K0 = 8.0
 _K: dict[str, float] = {stat: _K0 / (phi - 1.0) for stat, phi in _PHI.items()}
-# -> tfl≈4.73, int≈14.04, ff≈25.00, tackle≈2.07
+# -> tfl≈4.73, int≈14.04, ff≈25.00, tackle≈2.07, sack≈7.10, fr≈100.00
 
 ZSCORE_WINSOR = 4.0  # matches dpvs/composite.py's winsorization convention
 
@@ -283,22 +443,77 @@ _GAMEBOOK_TEAMS: dict[str, tuple[int, int]] = {
     "tam": (1976, 1977),
 }
 
-# Base weights when ALL five components are available. UNCHANGED from the
-# 2026-08-21 reweight (see docs/framework_decisions.md §11); now applied to
-# z-scored components rather than raw shares (see module docstring point 4).
+# Base weights when all six components are available.
+#
+# 2026-08-22 REPLACEMENT (see docs/framework_decisions.md §20): supersedes
+# the §18 event-value-derived weights (0.10/0.113/0.179/0.367/0.242) at the
+# user's own explicit, direct instruction: "There shouldn't be ANY z-score
+# by position at all for these stats. 18 sacks is better than 12 sacks, end
+# of story, I don't care if it's the Kicker getting the sacks. We do care
+# about the event value though, again, Sacks, TFL, Tackles in order." Two
+# separate changes bundled into one pass:
+#
+#   1. Every one of these five components' z-scoring moved from
+#      season x position_group to season-ONLY (all positions pooled) -- see
+#      _add_rate_component's rate_z/count_z calls and the tackle_share_z
+#      assignment in compute_idi(), both changed from
+#      ["season", "_idi_pos_group"] to ["season"]. This is the direct fix
+#      for the motivating bug: Donnie Shell (S, 1978) drew
+#      sack_component_z=4.0 (winsorized max) because the "coverage"
+#      position group's sack-rate population variance is tiny (safeties
+#      almost never sack the QB), so his one rare sack looked like a
+#      4-sigma outlier against a nearly-zero-variance peer population.
+#      Compared against the WHOLE league instead (where several
+#      pass-rushers post double-digit sacks every season), one sack from
+#      any position is unremarkable -- exactly the "18 sacks is better than
+#      12 sacks, I don't care who's getting them" framing. NOTE: the
+#      empirical-Bayes shrinkage PRIOR (season x _idi_pos_group population
+#      rate, used only when a player has no qualifying career history --
+#      see _add_rate_component) deliberately keeps its position-group
+#      grouping -- that's a *centering* choice (what rate should we expect
+#      from a player like this absent more data), not a *comparison* one,
+#      and isn't what produced the Shell bug (which was purely a
+#      denominator-variance problem in the z-score step itself). Also
+#      unchanged: dpvs/composite.py's own OUTER idi_z z-score, still
+#      season x position_group by design (out of scope -- not touched;
+#      that's a coarser, deliberate "how does this player rank among peers
+#      at their position overall" comparison on the final blended score,
+#      not the per-component mechanism that broke).
+#
+#   2. Weights re-picked directly from the user's own explicit ranges
+#      (their stated starting-point guesses, not re-derived from event
+#      value or phi this time -- explicitly a starting point for further
+#      tuning, not a final answer):
+#        Sacks:   0.25-0.40  -> chose 0.30 (mid-low: the ceiling would let
+#                 sacks alone dominate every other component combined)
+#        TFL:     0.20-0.35  -> chose 0.25 (midpoint)
+#        Tackles: 0.15-0.25  -> chose 0.20 (upper end -- reflects "Tackles"
+#                 still being named third in the user's explicit value
+#                 ordering "Sacks, TFL, Tackles," not merely a participation
+#                 signal the way §18's fixed 0.10 treated it)
+#        FF:      0.10-0.15  -> chose 0.125 (midpoint)
+#        INT:     0.12 (fixed by the user)
+#        FR:      0.12 (fixed by the user; REINSTATED this pass, reversing
+#                 §11's drop -- see the "fr" phi/k note above for how its
+#                 known-poor reliability (phi=1.08) is handled via extreme
+#                 shrinkage, not by omitting it or leaving it unadjusted)
+#      Raw picks (0.30, 0.25, 0.20, 0.125, 0.12, 0.12) sum to 1.115;
+#      normalized by dividing through by 1.115 so the six weights sum to
+#      1.000 while preserving the chosen ratios exactly:
 _W_BASE = {
-    "tackle_share_z":  0.23,
-    "tfl_component_z": 0.26,
-    "sack_share_z":    0.16,
-    "int_component_z": 0.20,
-    "ff_component_z":  0.16,
+    "tackle_share_z":   0.179,   # 0.20   / 1.115
+    "tfl_component_z":  0.224,   # 0.25   / 1.115
+    "sack_component_z": 0.269,   # 0.30   / 1.115 (rate+shrinkage-treated, see _add_rate_component call below)
+    "int_component_z":  0.108,   # 0.12   / 1.115
+    "ff_component_z":   0.112,   # 0.125  / 1.115
+    "fr_component_z":   0.108,   # 0.12   / 1.115 (rate+shrinkage-treated, extreme shrinkage -- phi=1.08, k=100)
 }
 
 # Components that are "presence-gated" per row (may be NaN and get dropped
 # from the weighted average, with the remaining weights renormalized).
-# sack_share_z/int_component_z/ff_component_z are always treated as
-# computable (default to a neutral 0.0 z via _safe() when genuinely absent)
-# since gold parquet covers them back to 1960.
+# sack_component_z/int_component_z/ff_component_z/fr_component_z are always
+# treated as computable (default to a neutral 0.0 z via _safe() when
+# genuinely absent) since gold parquet covers them back to 1960.
 _GATED_COMPONENTS = ("tackle_share_z", "tfl_component_z")
 
 
@@ -526,6 +741,8 @@ def load_gold_stats_from_db(seasons: list[int]) -> pd.DataFrame | None:
                    sum(coalesce(pgs.fr, 0)) AS fr,
                    sum(coalesce(pgs.ff, 0)) AS ff,
                    sum(coalesce(pgs.comb_tackle, 0)) AS comb_tackles,
+                   sum(coalesce(pgs.solo_tackle, 0)) AS solo,
+                   sum(coalesce(pgs.ast_tackle, 0)) AS ast,
                    sum(coalesce(pgs.tfl, 0)) AS tfl
             FROM gold.player_game_stats pgs
             JOIN gold.games g ON g.game_id = pgs.game_id
@@ -554,24 +771,38 @@ def load_gold_stats_from_db(seasons: list[int]) -> pd.DataFrame | None:
         .groupby(["season", "team", "player_name"], as_index=False)
         .agg(player_id=("player_id", "first"), pos=("pos", "first"),
              g=("g", "sum"), sk=("sk", "sum"), int=("int", "sum"), fr=("fr", "sum"),
-             ff=("ff", "sum"), comb_tackles=("comb_tackles", "sum"), tfl=("tfl", "sum"))
+             ff=("ff", "sum"), comb_tackles=("comb_tackles", "sum"),
+             solo=("solo", "sum"), ast=("ast", "sum"), tfl=("tfl", "sum"))
     )
     df = _compute_gold_shares(df)
     keep = ["season", "team", "player_id", "player_name", "pos", "g", "sk", "int", "fr", "ff",
-            "comb_tackles", "tfl", "sack_share", "pfr_tackle_share", "pfr_tackle_source", "tackle_source"]
+            "comb_tackles", "solo", "ast", "team_solo", "team_ast", "tfl",
+            "pfr_tackle_share", "pfr_tackle_source", "tackle_source"]
     df["tackle_source"] = "footballdb_gold_pergame"
     return df[[c for c in keep if c in df.columns]].copy()
 
 
 def _compute_gold_shares(df: pd.DataFrame) -> pd.DataFrame:
-    """Team-total sack_share / pfr_tackle_share, factored out of
-    load_gold_stats() so both the parquet path and the new DB path
-    (load_gold_stats_from_db()) apply the identical share formula."""
-    team_totals = df.groupby(["season", "team"], as_index=False).agg(
-        team_sk=("sk", "sum"), team_comb_tkl=("comb_tackles", "sum"))
+    """Team-total pfr_tackle_share (comb_tackles-based) + raw team_solo/
+    team_ast totals, factored out of load_gold_stats() so both the parquet
+    path and the DB path (load_gold_stats_from_db()) apply the identical
+    formula. team_solo/team_ast (2026-08-22) feed the pre-2001 tackle
+    opportunity-ratio normalization -- see
+    load_tackle_opportunity_adjustment() and compute_idi()'s "Layer 2b"
+    below.
+
+    sack_share / team_sk REMOVED 2026-08-22 (see module docstring and
+    docs/framework_decisions.md): sack now uses _add_rate_component's raw-
+    count rate+shrinkage treatment exclusively (sack_component_z) -- no
+    team-share computation for sack exists anywhere in this file anymore.
+    """
+    agg = {"team_comb_tkl": ("comb_tackles", "sum")}
+    if "solo" in df.columns:
+        agg["team_solo"] = ("solo", "sum")
+    if "ast" in df.columns:
+        agg["team_ast"] = ("ast", "sum")
+    team_totals = df.groupby(["season", "team"], as_index=False).agg(**agg)
     df = df.merge(team_totals, on=["season", "team"], how="left")
-    denom_sk = df["team_sk"].replace(0, np.nan)
-    df["sack_share"] = (df["sk"] / denom_sk).clip(0, 1)
     meaningful = df["team_comb_tkl"] >= 50
     df["pfr_tackle_share"] = np.where(
         meaningful, (df["comb_tackles"] / df["team_comb_tkl"].replace(0, np.nan)).clip(0, 1), np.nan)
@@ -672,14 +903,35 @@ def load_pbp_tfl() -> pd.DataFrame:
     return df[["season", "team", "player", "tfl_count", "n_obs", "tfl_tier"]]
 
 
+def load_tackle_opportunity_adjustment() -> pd.DataFrame:
+    """
+    2026-08-22: pre-2001 tackle opportunity-ratio normalization table (see
+    module docstring's "Layer 2b" description in compute_idi() and
+    scripts/build_tackle_opportunity_ratio.py, which builds
+    TACKLE_OPPORTUNITY_ADJ_CORPUS). Returns season, team, opportunities,
+    adj_expected_solos, adj_expected_ast -- one row per 1967-2000
+    team-season. Empty DataFrame (with a warning) if the corpus file
+    hasn't been built yet; compute_idi() treats that the same as "no
+    adjustment available" and leaves Layer 2's raw pfr_tackle_share
+    untouched, same graceful-degradation pattern as every other
+    file-backed loader in this module.
+    """
+    if not TACKLE_OPPORTUNITY_ADJ_CORPUS.exists():
+        print(f"  [idi] WARNING: {TACKLE_OPPORTUNITY_ADJ_CORPUS} not found — "
+              f"run scripts/build_tackle_opportunity_ratio.py first. Pre-2001 "
+              f"tackle_share will use Layer 2's raw (unadjusted) team-share "
+              f"this build.")
+        return pd.DataFrame(columns=["season", "team", "opportunities",
+                                      "adj_expected_solos", "adj_expected_ast"])
+    return pd.read_csv(TACKLE_OPPORTUNITY_ADJ_CORPUS)
+
+
 # ── gold parquet loader ────────────────────────────────────────────────────────
 
 def load_gold_stats(seasons: list[int]) -> pd.DataFrame:
     """
     Load individual defensive stats from gold parquet.
-    Returns per-player-season: sacks, ints, frs, ffs, games, tfl, plus
-    sack_share (still a team-total share — sack reliability didn't motivate
-    moving off shares the way TFL/INT/FF did).
+    Returns per-player-season: sacks, ints, frs, ffs, games, tfl.
     Also computes PFR tackle_share for seasons where comb_tackles is available
     (primarily 2001+, plus media-guide-patched seasons for earlier years).
     Gold team codes are uppercase (MIN, PIT); we lowercase them to match
@@ -691,6 +943,17 @@ def load_gold_stats(seasons: list[int]) -> pd.DataFrame:
     read, so the returned frame always covers every season requested --
     see the "Postgres-backed sources" section above for why 1960-1966
     can't be moved off the parquet yet.
+
+    2026-08-22: no longer computes sack_share (removed entirely -- see
+    module docstring, sack now uses _add_rate_component exclusively) or
+    solo/ast team totals (the pre-2001 tackle opportunity-ratio
+    normalization, see load_tackle_opportunity_adjustment(), only has an
+    "opportunities" reference for 1967-2000 via football_db's
+    gold.team_game_stats; this file-fallback path only fires in practice
+    for 1960-1966 or a full Postgres outage, neither of which that table
+    covers, so it degrades gracefully to the unadjusted pfr_tackle_share
+    below rather than adding dead-weight columns for a case that never
+    fires).
     """
     db_df = load_gold_stats_from_db(seasons)
     file_seasons = seasons if db_df is None else sorted(set(seasons) - set(db_df["season"].unique()))
@@ -722,20 +985,16 @@ def load_gold_stats(seasons: list[int]) -> pd.DataFrame:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    # Team totals per season for sack_share only (TFL/INT/FF moved off
-    # team-share in the 2026-08-21 rebuild — see module docstring).
-    agg = {"team_sk": ("sk", "sum")}
+    # Team totals per season (comb_tackles only -- sack_share removed
+    # 2026-08-22, see module docstring; sack now uses _add_rate_component
+    # exclusively, no team-share computation for it anywhere in this file).
+    agg = {}
     if "comb_tackles" in df.columns:
         agg["team_comb_tkl"] = ("comb_tackles", "sum")
 
-    team_totals = df.groupby(["season", "team"], as_index=False).agg(**agg)
-    df = df.merge(team_totals, on=["season", "team"], how="left")
-
-    def _share(num_col: str, den_col: str) -> pd.Series:
-        denom = df[den_col].replace(0, np.nan)
-        return (df[num_col] / denom).clip(0, 1)
-
-    df["sack_share"] = _share("sk", "team_sk")
+    if agg:
+        team_totals = df.groupby(["season", "team"], as_index=False).agg(**agg)
+        df = df.merge(team_totals, on=["season", "team"], how="left")
 
     # PFR / media-guide tackle share (used when gamebook data is unavailable)
     if "comb_tackles" in df.columns and "team_comb_tkl" in df.columns:
@@ -754,7 +1013,6 @@ def load_gold_stats(seasons: list[int]) -> pd.DataFrame:
     keep = [
         "season", "team", "player_id", "player_name", "pos",
         "g", "sk", "int", "fr", "ff", "comb_tackles", "tfl",
-        "sack_share",
         "pfr_tackle_share", "pfr_tackle_source", "tackle_source",
     ]
     file_df = df[[c for c in keep if c in df.columns]].copy()
@@ -810,10 +1068,17 @@ def _add_rate_component(
 ) -> pd.DataFrame:
     """
     Build `{stat}_component_z` = 0.5·z(shrunk per-game rate) + 0.5·z(raw
-    season count), both z-scored within season × _idi_pos_group, using
-    empirical-Bayes shrinkage (k = _K[stat]) toward a career-to-date prior
-    (falling back to season × position_group population rate, then a
-    dataset-wide scalar). See module docstring points 2-3.
+    season count), BOTH Z-SCORED WITHIN SEASON ONLY (all positions pooled --
+    2026-08-22, see docs/framework_decisions.md §20; previously season ×
+    _idi_pos_group, changed at the user's explicit instruction that there
+    should be no position-relative z-scoring for these components at all).
+    Empirical-Bayes shrinkage (k = _K[stat]) is still applied toward a
+    career-to-date prior (falling back to season × position_group
+    population rate, then a dataset-wide scalar) -- that grouping is
+    unchanged, deliberately: it's a centering/expectation choice, not the
+    z-score comparison the user's instruction was about. See module
+    docstring points 2-3 and the _W_BASE comment above for the full
+    reasoning.
 
     merged must already have count_col, nobs_col, and _idi_pos_group.
     count_col/nobs_col are NaN where the stat is unavailable for that row.
@@ -843,12 +1108,22 @@ def _add_rate_component(
         prior_count.loc[has_career] / prior_nobs.loc[has_career]
     )
 
-    # season × position_group population rate fallback
-    pop = df.loc[avail].groupby(["season", "_idi_pos_group"]).apply(
-        lambda g: g[count_col].sum() / g[nobs_col].sum() if g[nobs_col].sum() > 0 else np.nan
-    )
-    pop_rate = df.set_index(["season", "_idi_pos_group"]).index.map(pop)
-    pop_rate = pd.Series(pop_rate, index=df.index, dtype=float)
+    # season × position_group population rate fallback. Guard the empty
+    # case (this stat has zero available rows anywhere in the frame --
+    # e.g. a season-range test build that falls entirely outside a
+    # source's coverage window): pandas' Index.map() on an empty grouped
+    # Series raises a shape error rather than returning all-NaN, a
+    # pre-existing latent bug hit and fixed here 2026-08-22 while testing
+    # the sack/tackle changes (unrelated to those changes themselves --
+    # this can fire for any stat given a narrow enough season/team slice).
+    if avail.any():
+        pop = df.loc[avail].groupby(["season", "_idi_pos_group"]).apply(
+            lambda g: g[count_col].sum() / g[nobs_col].sum() if g[nobs_col].sum() > 0 else np.nan
+        )
+        pop_rate = df.set_index(["season", "_idi_pos_group"]).index.map(pop)
+        pop_rate = pd.Series(pop_rate, index=df.index, dtype=float)
+    else:
+        pop_rate = pd.Series(np.nan, index=df.index, dtype=float)
 
     # dataset-wide scalar, last resort
     global_rate = (
@@ -865,11 +1140,14 @@ def _add_rate_component(
         n_obs.loc[avail] * obs_rate.loc[avail] + k * prior_rate.loc[avail]
     ) / (n_obs.loc[avail] + k)
 
+    # 2026-08-22 (§20): z-score within SEASON ONLY, not season ×
+    # _idi_pos_group -- see this function's docstring and the _W_BASE
+    # comment above for why (the Donnie Shell sack-component-z=4.0 bug).
     tmp = df[["season", "_idi_pos_group"]].copy()
     tmp["_rate"] = shrunk_rate
     tmp["_count"] = df[count_col].where(avail)
-    rate_z = _zscore_within_groups(tmp, "_rate", ["season", "_idi_pos_group"])
-    count_z = _zscore_within_groups(tmp, "_count", ["season", "_idi_pos_group"])
+    rate_z = _zscore_within_groups(tmp, "_rate", ["season"])
+    count_z = _zscore_within_groups(tmp, "_count", ["season"])
 
     component_z = pd.Series(np.nan, index=df.index, dtype=float)
     both = rate_z.notna() & count_z.notna()
@@ -946,7 +1224,17 @@ def compute_idi(
          plain share). Kept for backward compatibility; in practice this
          path does not exist on this machine so gamebook_df is always
          empty and this layer never fires (see GAMEBOOK_BASE).
-      3. PFR/media-guide comb_tackles (2001+ and some earlier seasons)
+      3. PFR/media-guide comb_tackles (2001+ and some earlier seasons).
+         For season < 2001, immediately followed by Layer 2b (2026-08-22):
+         the raw team-season total this share was computed from gets
+         replaced with an opportunity-ratio-adjusted expected total (see
+         load_tackle_opportunity_adjustment() /
+         scripts/build_tackle_opportunity_ratio.py) while the player's own
+         real solo/assist share is kept — fixes confirmed pre-2001 team-
+         total inflation (e.g. Randy Gradishar's 1978 media-guide-credited
+         286 solo tackles) without discarding real relative-share
+         information. 2001+ rows are untouched (that's the reference era
+         this adjustment is calibrated FROM).
       4. No tackle data → tackle_share_z dropped from the IDI formula,
          weights rebalanced
 
@@ -972,7 +1260,8 @@ def compute_idi(
     # (critical for 2001-2018 where starters.csv is absent)
     gold_df["gold_pos"] = gold_df["pos"]
     gold_cols = ["season", "team", "_name_key",
-                 "sack_share", "g", "int", "ff", "tfl",
+                 "sk", "g", "int", "ff", "fr", "tfl",
+                 "solo", "ast", "team_solo", "team_ast",
                  "pfr_tackle_share", "pfr_tackle_source", "tackle_source",
                  "gold_pos"]
     merged = tcs_df.merge(
@@ -1030,9 +1319,53 @@ def compute_idi(
         has_pfr = no_tackle & pd.notna(merged["pfr_tackle_share"])
         merged.loc[has_pfr, "tackle_share"] = merged.loc[has_pfr, "pfr_tackle_share"]
         merged.loc[has_pfr, "idi_tackle_source"] = merged.loc[has_pfr, "pfr_tackle_source"].fillna("pfr")
+    else:
+        has_pfr = pd.Series(False, index=merged.index)
 
+    # Layer 2b: pre-2001 tackle opportunity-ratio normalization (2026-08-22
+    # -- see module docstring, docs/framework_decisions.md, and
+    # scripts/build_tackle_opportunity_ratio.py). Confirmed real problem
+    # this fixes: some pre-2001 team-season tackle TOTALS are grossly
+    # inflated by their era's own scoring/media-guide practice (flagship
+    # case, confirmed directly: Randy Gradishar's 1978 media guide credits
+    # him 286 solo tackles in 16 games -- implausible at any era). A
+    # player's SHARE of the team total is presumably far less distorted by
+    # this than the absolute total, so this layer keeps each player's real
+    # observed solo/assist share but replaces Layer 2's raw, unreliable
+    # team-season total with an opportunity-anchored "adjusted expected"
+    # total (real defensive opportunities that season x a stable ratio
+    # measured from the one era this project trusts as officially,
+    # reliably scored, 2001-2025 -- see the prep script's stability
+    # report). Only touches rows Layer 2 just assigned above (has_pfr) for
+    # season < 2001 -- Layer 0's gated gamebook corpus (1967-1977) already
+    # has its own, differently-validated per-game quality control and is
+    # untouched; 2001+ is the reference era this fix is calibrated FROM,
+    # so it's untouched too, by construction (no adjustment table row
+    # exists for it).
+    adj_df = load_tackle_opportunity_adjustment()
+    have_split = {"solo", "ast", "team_solo", "team_ast"}.issubset(merged.columns)
+    if not adj_df.empty and have_split:
+        merged = merged.merge(adj_df, on=["season", "team"], how="left")
+        solo_share = merged["solo"] / merged["team_solo"].replace(0, np.nan)
+        ast_share = merged["ast"] / merged["team_ast"].replace(0, np.nan)
+        adj_denom = merged["adj_expected_solos"] + merged["adj_expected_ast"]
+        normalized = (
+            solo_share.fillna(0) * merged["adj_expected_solos"]
+            + ast_share.fillna(0) * merged["adj_expected_ast"]
+        ) / adj_denom.replace(0, np.nan)
+        usable = (
+            has_pfr & (merged["season"] < 2001)
+            & solo_share.notna() & adj_denom.notna() & (adj_denom > 0)
+        )
+        merged.loc[usable, "tackle_share"] = normalized.loc[usable]
+        merged.loc[usable, "idi_tackle_source"] = "opportunity_ratio_adjusted_pre2001"
+        merged.drop(columns=["opportunities", "adj_expected_solos", "adj_expected_ast"],
+                    inplace=True, errors="ignore")
+
+    # 2026-08-22 (§20): season-only z-scoring (all positions pooled), not
+    # season × _idi_pos_group -- see module docstring / _W_BASE comment.
     merged["tackle_share_z"] = _zscore_within_groups(
-        merged.assign(_ts=merged["tackle_share"]), "_ts", ["season", "_idi_pos_group"]
+        merged.assign(_ts=merged["tackle_share"]), "_ts", ["season"]
     )
 
     # Layer 0 (cont'd): overwrite tackle_share_z for gated-corpus rows with
@@ -1045,9 +1378,20 @@ def compute_idi(
     has_gated_tackle = merged["_tackle_nobs"].notna()
     merged.loc[has_gated_tackle, "tackle_share_z"] = merged.loc[has_gated_tackle, "tackle_component_z"]
 
-    merged["sack_share_z"] = _zscore_within_groups(
-        merged, "sack_share", ["season", "_idi_pos_group"]
-    )
+    # sack_component_z (2026-08-22, see module docstring and
+    # docs/framework_decisions.md): sack no longer has ANY team-share
+    # treatment -- it uses _add_rate_component exclusively, same machinery
+    # as TFL/INT/FF, with sack's own measured phi=2.126 -> k≈7.10 (see
+    # _PHI above). Raw count ("sk") and games ("g") come from gold_df,
+    # available for effectively every row that has gold coverage at all
+    # (1960+) -- unlike tackle's Layer-0/1/2 partial coverage, there's no
+    # separate "gated corpus" tier for sack, so this is the only sack
+    # treatment in the file; a row with no "g"/"sk" at all simply gets a
+    # NaN sack_component_z, which _idi_row's _safe() reads as a neutral
+    # 0.0 (sack_component_z is not in _GATED_COMPONENTS, matching
+    # int_component_z / ff_component_z's existing fallback semantics).
+    merged["_sack_nobs"] = merged["g"] if "g" in merged.columns else np.nan
+    merged = _add_rate_component(merged, "sack", "sk", "_sack_nobs", None)
 
     # ── TFL raw count + n_obs, by era (mutually exclusive season ranges) ───
     merged["_tfl_count"] = np.nan
@@ -1102,11 +1446,22 @@ def compute_idi(
     merged = _add_rate_component(merged, "int", "int", "_int_nobs", None)
     merged = _add_rate_component(merged, "ff", "ff", "_ff_nobs", None)
 
+    # ── FR (fumble recovery), REINSTATED 2026-08-22 (§20) ───────────────────
+    # Same raw-count rate+shrinkage+volume treatment as int/ff (gold parquet
+    # covers "fr" back to 1960, same as int/ff/sk), using fr's own phi=1.08
+    # (k≈100.0, see _PHI/_K above) -- reverses §11's drop-entirely decision
+    # at the user's explicit request; not a flat unadjusted count, and not
+    # gated (defaults to a neutral 0.0 z via _safe() when genuinely absent,
+    # same fallback semantics as int_component_z/ff_component_z/
+    # sack_component_z).
+    merged["_fr_nobs"] = merged["g"] if "g" in merged.columns else np.nan
+    merged = _add_rate_component(merged, "fr", "fr", "_fr_nobs", None)
+
     merged["idi"] = merged.apply(_idi_row, axis=1)
     merged["idi_has_tackles"] = pd.notna(merged["tackle_share_z"])
     merged["idi_has_tfl"] = pd.notna(merged["tfl_component_z"])
     merged.drop(columns=[
         "_name_key", "_idi_pos_group", "_tfl_count", "_tfl_nobs", "_tfl_tier",
-        "_int_nobs", "_ff_nobs", "_tackle_count", "_tackle_nobs",
+        "_int_nobs", "_ff_nobs", "_fr_nobs", "_tackle_count", "_tackle_nobs", "_sack_nobs",
     ], inplace=True, errors="ignore")
     return merged

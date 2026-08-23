@@ -57,8 +57,32 @@ TEAM_TO_FID: dict[str, int] = {
 INSERT_COLS = (
     "season", "team", "franchise_id", "player_id", "player_name", "pos", "position_group",
     "games_played", "tcs_z", "idi", "idi_z", "wowy_z", "dpvs_g", "dpvs_a", "dpvs_p",
-    "tackle_share_z", "tfl_component_z", "sack_share_z", "int_component_z", "ff_component_z",
-    "tackle_share", "sack_share", "int_share", "ff_share", "fr_share",
+    # sack_share_z -> sack_component_z, 2026-08-22: sack no longer has any
+    # team-share treatment at all (see dpvs/idi.py module docstring) --
+    # sack_share itself (the raw team-share number) is REMOVED from this
+    # list too, not just renamed; there is no replacement raw column for it
+    # (sack_component_z is a rate+shrinkage+volume composite, not a share).
+    # fr_component_z ADDED 2026-08-22 (§20): FR reinstated as a sixth IDI
+    # component (rate+shrinkage-treated, phi=1.08/k≈100 -- see
+    # dpvs/idi.py's module docstring). fr_share (below) stays unused/NULL,
+    # same reasoning as sack_share's removal -- no un-standardized raw
+    # share exists for a rate+shrinkage+volume composite.
+    "tackle_share_z", "tfl_component_z", "sack_component_z", "int_component_z", "ff_component_z",
+    "fr_component_z",
+    "tackle_share",
+    # int_share/ff_share/fr_share REMOVED 2026-08-22: found, while wiring up
+    # this session's sack/tackle changes, that no code path in dpvs/idi.py
+    # has computed these three in a long time (pre-dating this session) --
+    # they only survived this far because a season-scoped incremental
+    # rebuild concatenates onto the OLD parquet, which still carried these
+    # columns (100% NaN) from whatever much earlier version last populated
+    # them; a from-scratch full rebuild (this session's --seasons 1967-2024,
+    # run after deleting the old parquet) exposed the gap immediately as a
+    # hard "parquet is missing expected column" failure. Dropped from this
+    # list rather than re-implemented -- nothing in this project currently
+    # reads them from gold.dpvs_g_player_season, and the schema columns stay
+    # in place (unused, always NULL going forward) rather than requiring a
+    # DB migration for an unrelated pre-existing gap.
     "idi_tackle_source", "idi_tfl_source", "tackle_source", "data_confidence",
     "season_pos_rank", "season_overall_rank",
 )

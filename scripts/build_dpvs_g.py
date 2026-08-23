@@ -102,7 +102,7 @@ def run(
         how="left",
     )
 
-    # Compute IDI (appends idi, tackle_share, tfl_share, sack_share, etc.)
+    # Compute IDI (appends idi, tackle_share, tfl_component_z, sack_component_z, etc.)
     merged = compute_idi(merged, gold_df, gamebook_df, gamebook_tfl_df, pbp_tfl_df, gamebook_tackle_gated_df)
     print(f"  IDI: {merged['idi_has_tackles'].sum()} rows with gamebook tackles, "
           f"{merged['idi_has_tfl'].sum()} rows with TFL data")
