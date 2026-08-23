@@ -40,6 +40,12 @@ RAW_TEAM_DIR = pathlib.Path.home() / "data" / "pfref" / "raw" / "season" / "team
 _OFFENSE_URL = "/years/{year}/"
 _DEFENSE_URL = "/years/{year}/opp.htm"
 
+# 1966-1969 are the years the AFL had its own, separate PFR season pages
+# (pre-1970 merger). Same page layout/table IDs as the NFL pages, just a
+# "_AFL" year suffix -- e.g. https://www.pro-football-reference.com/years/1969_AFL/
+_OFFENSE_URL_AFL = "/years/{year}_AFL/"
+_DEFENSE_URL_AFL = "/years/{year}_AFL/opp.htm"
+
 # Tables on these pages that are not season stats (skip them)
 _SKIP_TABLE_IDS = frozenset([
     "div_standings",
@@ -97,6 +103,35 @@ def _parse_table(table, year: int) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
+# Merge helper — combine a newly-scraped league's rows into an existing
+# season CSV without disturbing rows already saved for the other league.
+# ---------------------------------------------------------------------------
+
+def _merge_into_existing(df: pd.DataFrame, file_path: pathlib.Path) -> pd.DataFrame:
+    """
+    Append df's rows to whatever is already at file_path (e.g. NFL rows
+    already saved for that year), rather than overwriting it.
+
+    Dedupes on (season, team) — the natural key for a team-season row on
+    these pages — keeping the EXISTING row on a collision so a rerun never
+    clobbers previously-saved data. Writes the combined result back to
+    file_path and returns it.
+    """
+    if file_path.exists():
+        existing = pd.read_csv(file_path)
+        combined = pd.concat([existing, df], ignore_index=True)
+        before = len(combined)
+        combined = combined.drop_duplicates(subset=["season", "team"], keep="first")
+        if len(combined) != before:
+            print(f"    merge into {file_path.name}: dropped "
+                  f"{before - len(combined)} duplicate team-season row(s)")
+    else:
+        combined = df
+    combined.to_csv(file_path, index=False)
+    return combined
+
+
+# ---------------------------------------------------------------------------
 # Page scraper — fetch one page, save every table found
 # ---------------------------------------------------------------------------
 
@@ -108,6 +143,7 @@ def _scrape_season_page(
     meta: MetadataTracker,
     skip_existing: bool,
     force: bool = False,
+    league: str = "NFL",
 ) -> list[pathlib.Path]:
     """
     Fetch one season page (offense or defense) and save all tables on it.
@@ -120,19 +156,27 @@ def _scrape_season_page(
         meta:        MetadataTracker instance
         skip_existing: If True, skip years already marked as pulled in metadata
         force:       Override skip_existing and re-pull even if metadata says done
+        league:      'NFL' (default) writes/overwrites the season CSV directly,
+                     same as always. 'AFL' fetches the parallel pre-merger
+                     AFL season page (1966-1969 only) and MERGES its rows
+                     into the existing per-table CSV instead of overwriting
+                     it, so NFL rows already saved for that year survive.
+                     Tracked under its own metadata dataset key
+                     (f"{side}_page_afl") so it never collides with the
+                     NFL pull's skip-existing state.
 
     Returns:
         List of file paths written.
     """
-    dataset_key = f"{side}_page"
+    dataset_key = f"{side}_page" if league == "NFL" else f"{side}_page_{league.lower()}"
 
     if not force and skip_existing and meta.is_pulled(dataset_key, year):
-        print(f"  [{side}] {year}: already pulled, skipping")
+        print(f"  [{side}/{league}] {year}: already pulled, skipping")
         return []
 
     save_base = RAW_TEAM_DIR / side
     url = BASE_URL + url_pattern.format(year=year)
-    print(f"  [{side}] {year}: fetching {url}")
+    print(f"  [{side}/{league}] {year}: fetching {url}")
 
     saved: list[pathlib.Path] = []
 
@@ -159,7 +203,10 @@ def _scrape_season_page(
             table_dir = save_base / table_id
             table_dir.mkdir(parents=True, exist_ok=True)
             file_path = table_dir / f"{table_id}_{year}.csv"
-            df.to_csv(file_path, index=False)
+            if league == "NFL":
+                df.to_csv(file_path, index=False)
+            else:
+                df = _merge_into_existing(df, file_path)
             saved.append(file_path)
 
         table_ids = [t["id"] for t in tables if not _parse_table(t, year).empty]
@@ -169,7 +216,7 @@ def _scrape_season_page(
               f"{'...' if len(tables) > 8 else ''}")
 
     except Exception as exc:
-        print(f"    ERROR [{side} {year}]: {exc}")
+        print(f"    ERROR [{side}/{league} {year}]: {exc}")
         meta.mark_failed(dataset_key, year, str(exc))
 
     return saved
@@ -185,16 +232,24 @@ def scrape_offense(
     scraper: PlaywrightScraper | None = None,
     meta: MetadataTracker | None = None,
     force: bool = False,
+    league: str = "NFL",
 ) -> list[pathlib.Path]:
-    """Scrape all tables from the offense season page for each year."""
+    """Scrape all tables from the offense season page for each year.
+
+    league='AFL' fetches the parallel pre-merger AFL page (years/{year}_AFL/,
+    valid for 1966-1969 only) and merges its rows into the existing
+    per-table CSVs instead of overwriting them — see _scrape_season_page.
+    """
     own = scraper is None
     scraper = scraper or PlaywrightScraper()
     meta = meta or MetadataTracker()
+    url_pattern = _OFFENSE_URL if league == "NFL" else _OFFENSE_URL_AFL
     saved: list[pathlib.Path] = []
     try:
         for year in years:
             saved += _scrape_season_page(
-                "offense", _OFFENSE_URL, year, scraper, meta, skip_existing, force
+                "offense", url_pattern, year, scraper, meta, skip_existing, force,
+                league=league,
             )
     finally:
         if own:
@@ -208,16 +263,24 @@ def scrape_defense(
     scraper: PlaywrightScraper | None = None,
     meta: MetadataTracker | None = None,
     force: bool = False,
+    league: str = "NFL",
 ) -> list[pathlib.Path]:
-    """Scrape all tables from the defense (opp) season page for each year."""
+    """Scrape all tables from the defense (opp) season page for each year.
+
+    league='AFL' fetches the parallel pre-merger AFL page (years/{year}_AFL/opp.htm,
+    valid for 1966-1969 only) and merges its rows into the existing
+    per-table CSVs instead of overwriting them — see _scrape_season_page.
+    """
     own = scraper is None
     scraper = scraper or PlaywrightScraper()
     meta = meta or MetadataTracker()
+    url_pattern = _DEFENSE_URL if league == "NFL" else _DEFENSE_URL_AFL
     saved: list[pathlib.Path] = []
     try:
         for year in years:
             saved += _scrape_season_page(
-                "defense", _DEFENSE_URL, year, scraper, meta, skip_existing, force
+                "defense", url_pattern, year, scraper, meta, skip_existing, force,
+                league=league,
             )
     finally:
         if own:
@@ -229,18 +292,23 @@ def scrape_all(
     years: range | list[int] = range(2025, 1949, -1),
     skip_existing: bool = True,
     force: bool = False,
+    league: str = "NFL",
 ) -> list[pathlib.Path]:
     """Scrape offense and defense pages for all years, sharing one browser session."""
+    url_offense = _OFFENSE_URL if league == "NFL" else _OFFENSE_URL_AFL
+    url_defense = _DEFENSE_URL if league == "NFL" else _DEFENSE_URL_AFL
     scraper = PlaywrightScraper()
     meta = MetadataTracker()
     saved: list[pathlib.Path] = []
     try:
         for year in years:
             saved += _scrape_season_page(
-                "offense", _OFFENSE_URL, year, scraper, meta, skip_existing, force
+                "offense", url_offense, year, scraper, meta, skip_existing, force,
+                league=league,
             )
             saved += _scrape_season_page(
-                "defense", _DEFENSE_URL, year, scraper, meta, skip_existing, force
+                "defense", url_defense, year, scraper, meta, skip_existing, force,
+                league=league,
             )
     finally:
         scraper.close()

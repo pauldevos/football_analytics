@@ -71,6 +71,15 @@ def main():
         help="Re-pull years already marked as done in metadata.",
     )
     ap.add_argument(
+        "--league",
+        choices=["NFL", "AFL"],
+        default="NFL",
+        help="NFL (default) fetches /years/{year}/ as always. AFL fetches the "
+             "parallel pre-merger /years/{year}_AFL/ page (valid 1966-1969 only) "
+             "and MERGES its rows into the existing per-table CSVs rather than "
+             "overwriting them.",
+    )
+    ap.add_argument(
         "--list-tables",
         metavar="YEAR",
         type=int,
@@ -86,17 +95,18 @@ def main():
 
     years = _parse_years(args.years)
     print(f"Side  : {args.side}")
+    print(f"League: {args.league}")
     print(f"Years : {years[0]}→{years[-1]} ({len(years)} year(s))")
     print(f"Force : {args.force}")
     print()
 
     skip = not args.force
     if args.side == "offense":
-        scrape_offense(years=years, skip_existing=skip, force=args.force)
+        scrape_offense(years=years, skip_existing=skip, force=args.force, league=args.league)
     elif args.side == "defense":
-        scrape_defense(years=years, skip_existing=skip, force=args.force)
+        scrape_defense(years=years, skip_existing=skip, force=args.force, league=args.league)
     else:
-        scrape_all(years=years, skip_existing=skip, force=args.force)
+        scrape_all(years=years, skip_existing=skip, force=args.force, league=args.league)
 
 
 if __name__ == "__main__":

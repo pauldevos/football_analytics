@@ -30,11 +30,16 @@ docstring) — not a full population, so not usable as a season-wide
 z-score denominator (mean/sd need the whole population, not the visible
 top slice). Hence this full-population build.
 
-Output: season, team, player, tackle_sum, games_qualified — one row per
-player-season with at least one qualifying game. tackle_sum/games_qualified
-is the qualifying-games tackle rate; dpvs/idi.py computes shrinkage/z-score
-treatment from these summed numerator/denominator pairs, same pattern as
-the TFL corpus.
+Output: season, team, player, tackle_sum, solo_sum, ast_sum, games_qualified
+— one row per player-season with at least one qualifying game.
+tackle_sum/games_qualified is the qualifying-games tackle rate; dpvs/idi.py
+computes shrinkage/z-score treatment from these summed numerator/denominator
+pairs, same pattern as the TFL corpus. solo_sum/ast_sum (added 2026-08-22,
+per football_analytics' own request to split the combined figure) are the
+same per-qualifying-game Solo/Ast values boxscore.md already carries
+per-player (parse_boxscore()'s row dicts have always had both — this is
+purely carrying an existing field through, not a new extraction); by
+construction solo_sum + ast_sum == tackle_sum for every row.
 
 Usage: python3 build_tackle_gated_corpus.py
     (needs football_db's .venv on PYTHONPATH — same requirement as
@@ -164,7 +169,8 @@ def build(seasons: list[int]) -> pd.DataFrame:
             for rw in sec['rows']:
                 raw.append({
                     'season': season, 'fid': own_fid, 'name': rw['name'],
-                    'tackle': rw['solo'] + rw['ast'], 'qualifies': qualifies,
+                    'tackle': rw['solo'] + rw['ast'], 'solo': rw['solo'],
+                    'ast': rw['ast'], 'qualifies': qualifies,
                 })
 
     print(f"  sides={total_sides} db_resolved={resolved_ct} qualifying={qual_ct}")
@@ -191,6 +197,8 @@ def build(seasons: list[int]) -> pd.DataFrame:
     canonicalizer.print_stats()
 
     tackle_sum = defaultdict(float)
+    solo_sum = defaultdict(float)
+    ast_sum = defaultdict(float)
     games_qual = defaultdict(int)
     for r in raw:
         if not r['qualifies']:
@@ -201,6 +209,8 @@ def build(seasons: list[int]) -> pd.DataFrame:
         name = canon.get(rkey, r['name'])
         key = (r['season'], r['fid'], name)
         tackle_sum[key] += r['tackle']
+        solo_sum[key] += r['solo']
+        ast_sum[key] += r['ast']
         games_qual[key] += 1
 
     rows = []
@@ -211,6 +221,8 @@ def build(seasons: list[int]) -> pd.DataFrame:
             'team': fid_to_abbr.get(fid, '??').lower(),
             'player': name,
             'tackle_sum': tackle_sum[key],
+            'solo_sum': solo_sum[key],
+            'ast_sum': ast_sum[key],
             'games_qualified': games_qual[key],
         })
     return pd.DataFrame(rows)

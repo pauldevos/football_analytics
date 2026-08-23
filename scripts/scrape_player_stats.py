@@ -73,17 +73,27 @@ def main():
         action="store_true",
         help="Re-pull years that already exist on disk.",
     )
+    ap.add_argument(
+        "--league",
+        choices=["NFL", "AFL"],
+        default="NFL",
+        help="NFL (default) fetches /years/{year}/{stat}.htm as always. AFL fetches "
+             "the parallel pre-merger /years/{year}_AFL/{stat}.htm page (valid "
+             "1966-1969 only) and MERGES its rows into the existing per-year CSVs "
+             "rather than overwriting them.",
+    )
     args = ap.parse_args()
 
     years = _parse_years(args.years)
     types = _parse_types(args.types)
 
     print(f"Stat types : {types}")
+    print(f"League     : {args.league}")
     print(f"Years      : {years[0]}–{years[-1]} ({len(years)} year(s))")
     print(f"Force      : {args.force}")
     print()
 
-    scrape_all(years=years, skip_existing=not args.force, stat_types=types)
+    scrape_all(years=years, skip_existing=not args.force, stat_types=types, league=args.league)
 
 
 if __name__ == "__main__":

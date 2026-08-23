@@ -64,6 +64,13 @@ _URL_PATTERNS: dict[str, str] = {
     "scoring": "/years/{year}/scoring.htm",
 }
 
+# 1966-1969 had separate AFL season pages (pre-1970 merger), same URL
+# pattern with a "_AFL" year suffix — mirrors team_stats.py's approach.
+_URL_PATTERNS_AFL: dict[str, str] = {
+    stat: pattern.replace("/years/{year}/", "/years/{year}_AFL/")
+    for stat, pattern in _URL_PATTERNS.items()
+}
+
 # Normalized column names applied when the count matches exactly.
 # 'player_link' and 'player_id' are inserted at index 1 and 2 before renaming.
 _NORMALIZED_COLUMNS: dict[str, list[str]] = {
@@ -104,20 +111,104 @@ _NORMALIZED_COLUMNS: dict[str, list[str]] = {
 # ---------------------------------------------------------------------------
 
 
+def _dedupe_columns(cols) -> list[str]:
+    """
+    Rename repeated column labels the same way pandas.read_csv does on load
+    (first stays bare, later ones get '.1', '.2', ...). Some PFR pages
+    (e.g. the 1969 AFL defense table) reuse a raw data-stat name ('yds')
+    for two different columns (INT yards, FR yards) when the normalized
+    rename doesn't apply (column-count mismatch). Without this, a
+    duplicate-named column breaks pd.concat during the AFL merge with
+    'Reindexing only valid with uniquely valued Index objects'. Applying
+    it consistently to both sides of a merge keeps position-based
+    alignment correct either way.
+    """
+    seen: dict[str, int] = {}
+    out = []
+    for c in cols:
+        if c not in seen:
+            seen[c] = 0
+            out.append(c)
+        else:
+            seen[c] += 1
+            out.append(f"{c}.{seen[c]}")
+    return out
+
+
+def _merge_player_rows(df: pd.DataFrame, file_path: pathlib.Path) -> pd.DataFrame:
+    """
+    Append df's (AFL) rows to whatever is already saved at file_path (NFL
+    rows for that year) instead of overwriting it.
+
+    Dedupe key is (player_id, team) when both are present, else falls back
+    to (player_name, team) — team is REQUIRED in the key, not just
+    player_id: a player traded mid-season gets a '2TM' aggregate row plus
+    one row per team under the SAME player_id (a real, legitimate PFR
+    pattern, confirmed on 1969 defense: Rosey Taylor / Nate Wright each
+    have 3 same-id rows for 2TM/CHI/SFO and 2TM/ATL/STL respectively).
+    player_id alone as the key silently collapsed those down to one row
+    the first time this was tried — caught and fixed before any real
+    AFL run. 1967-69 AFL/NFL were fully separate leagues so no player
+    appears in both in the same season; this key still guards a rerun of
+    the same league/year without discarding real per-team splits.
+    Existing rows win ties.
+    """
+    if file_path.exists():
+        existing = pd.read_csv(file_path)
+        existing.columns = _dedupe_columns(existing.columns)
+        df = df.copy()
+        df.columns = _dedupe_columns(df.columns)
+        combined = pd.concat([existing, df], ignore_index=True)
+
+        if "player_id" in combined.columns and combined["player_id"].notna().any():
+            id_col = "player_id"
+        else:
+            id_col = "player_name" if "player_name" in combined.columns else None
+        team_col = "team_abbrev" if "team_abbrev" in combined.columns else (
+            "team" if "team" in combined.columns else None
+        )
+        key_cols = [c for c in (id_col, team_col) if c is not None]
+
+        before = len(combined)
+        if key_cols:
+            # Rows with a null id (section-header/divider rows PFR's HTML
+            # leaves in the tbody) aren't real players — drop them outright
+            # rather than deduping, since NaN==NaN would otherwise collapse
+            # many unrelated blank rows into one.
+            if id_col is not None:
+                combined = combined[combined[id_col].notna()]
+            combined = combined.drop_duplicates(subset=key_cols, keep="first")
+        if len(combined) != before:
+            print(f"    merge into {file_path.name}: dropped "
+                  f"{before - len(combined)} duplicate/blank player row(s)")
+    else:
+        combined = df
+    combined.to_csv(file_path, index=False)
+    return combined
+
+
 def _scrape_player_stat(
     stat_type: str,
     years: list[int],
     skip_existing: bool = True,
     scraper: PlaywrightScraper | None = None,
     meta: MetadataTracker | None = None,
+    league: str = "NFL",
 ) -> list[pathlib.Path]:
-    """Pull one player stat type for all given years, skipping already-pulled years."""
+    """Pull one player stat type for all given years, skipping already-pulled years.
+
+    league='AFL' fetches the parallel pre-merger AFL page (1966-1969 only,
+    /years/{year}_AFL/{stat}.htm) and MERGES its rows into the existing
+    per-year CSV rather than overwriting it, tracked under its own
+    metadata dataset key so it never collides with the NFL pull's
+    skip-existing state.
+    """
     scraper = scraper or PlaywrightScraper()
     meta = meta or MetadataTracker()
 
     table_id = _TABLE_IDS[stat_type]
     header_idx = _HEADER_ROW_INDEX[stat_type]
-    url_pattern = _URL_PATTERNS[stat_type]
+    url_pattern = _URL_PATTERNS[stat_type] if league == "NFL" else _URL_PATTERNS_AFL[stat_type]
     normalized_cols = _NORMALIZED_COLUMNS.get(stat_type)
 
     save_dir = RAW_PLAYER_DIR / stat_type
@@ -126,20 +217,20 @@ def _scrape_player_stat(
     saved_files: list[pathlib.Path] = []
 
     for year in years:
-        dataset_key = f"player_{stat_type}"
+        dataset_key = f"player_{stat_type}" if league == "NFL" else f"player_{stat_type}_{league.lower()}"
         file_path = save_dir / f"{stat_type}_{year}.csv"
 
         if skip_existing and meta.is_pulled(dataset_key, year):
-            print(f"  [{stat_type}] {year}: already pulled, skipping")
+            print(f"  [{stat_type}/{league}] {year}: already pulled, skipping")
             continue
-        if skip_existing and file_path.exists():
+        if league == "NFL" and skip_existing and file_path.exists():
             # File exists from a previous scraper run that predates this tracker
             meta.mark_pulled(dataset_key, year, file_path=file_path)
-            print(f"  [{stat_type}] {year}: file exists, back-filling metadata, skipping")
+            print(f"  [{stat_type}/{league}] {year}: file exists, back-filling metadata, skipping")
             continue
 
         url = BASE_URL + url_pattern.format(year=year)
-        print(f"  [{stat_type}] {year}: fetching {url}")
+        print(f"  [{stat_type}/{league}] {year}: fetching {url}")
 
         try:
             # Playwright's browser JS already uncomments tables — strip_comments=False avoids duplicates
@@ -156,7 +247,10 @@ def _scrape_player_stat(
             if normalized_cols and len(normalized_cols) == len(df.columns):
                 df.columns = normalized_cols
 
-            df.to_csv(file_path, index=False)
+            if league == "NFL":
+                df.to_csv(file_path, index=False)
+            else:
+                df = _merge_player_rows(df, file_path)
 
             meta.mark_pulled(dataset_key, year, file_path=file_path, record_count=len(df))
             saved_files.append(file_path)
@@ -167,10 +261,10 @@ def _scrape_player_stat(
                 meta.mark_pulled(dataset_key, year, record_count=0)
                 print(f"    table not on page for {year} — marked as checked, skipping")
             else:
-                print(f"    ERROR [{stat_type} {year}]: {exc}")
+                print(f"    ERROR [{stat_type}/{league} {year}]: {exc}")
                 meta.mark_failed(dataset_key, year, str(exc))
         except Exception as exc:
-            print(f"    ERROR [{stat_type} {year}]: {exc}")
+            print(f"    ERROR [{stat_type}/{league} {year}]: {exc}")
             meta.mark_failed(dataset_key, year, str(exc))
 
     return saved_files
@@ -258,10 +352,14 @@ def scrape_all(
     years: range | list[int] = range(1950, 2026),
     skip_existing: bool = True,
     stat_types: list[str] | None = None,
+    league: str = "NFL",
 ) -> dict[str, list[pathlib.Path]]:
     """
     Scrape player stats for all (or specified) stat types.
     Shares a single scraper/meta instance to avoid redundant browser launches.
+
+    league='AFL' fetches the parallel pre-merger AFL pages (1966-1969 only)
+    and merges rows into the existing per-year CSVs — see _scrape_player_stat.
     """
     # scrimmage = rushing + receiving combined; useful for total scrimmage yards per era
     all_types = ["passing", "rushing", "receiving", "scrimmage", "defense",
@@ -273,9 +371,10 @@ def scrape_all(
     results: dict[str, list[pathlib.Path]] = {}
     try:
         for stat_type in types_to_run:
-            print(f"\n=== Scraping player {stat_type} ===")
+            print(f"\n=== Scraping player {stat_type} ({league}) ===")
             results[stat_type] = _scrape_player_stat(
-                stat_type, list(years), skip_existing, scraper=scraper, meta=meta
+                stat_type, list(years), skip_existing, scraper=scraper, meta=meta,
+                league=league,
             )
     finally:
         scraper.close()

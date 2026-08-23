@@ -208,3 +208,20 @@ further from the LOS on the plays where they do make a tackle.
 - The quality_weight formula in §5 is a first-pass proposal with
   round-number constants, explicitly flagged as needing further tuning
   before being treated as production-ready for doc 04.
+- **Limitation, added 2026-08-22 per the user's own framing**: yards-gained
+  at the point of the tackle is a good first-order proxy for tackle
+  *location* quality, but it cannot capture a tackle's touchdown-saving
+  *counterfactual* value — stopping a play that could have gone for
+  much more (e.g. a broken-open runner or receiver in space) if that tackle
+  hadn't been made. A Safety's open-field tackle at the +10 that prevents a
+  60-yard house call and a Safety's open-field tackle at the +10 on a play
+  that was never going anywhere both score identically here (both are just
+  "+10yd, Safety"), even though the first is far more valuable. Properly
+  valuing that requires the fuller expected-points/EPA framework in
+  `docs/deferred/03_epa_pbp_value_model.md` (which can compare the play's
+  actual outcome against the expected-points value of the field position
+  and defenders remaining at the moment of the tackle), not this doc's
+  simpler yards-gained lens. This doc's result stands on its own terms —
+  "where do tackles by position happen" — but should not be read as a full
+  tackle-value model; doc 03 is the right place to pick up that harder
+  question.
