@@ -1,10 +1,13 @@
 """
 DPVS-G composite score and z-score normalization.
 
-All three components are z-scored within (season × position_group) before
-combining. This makes the final number directly interpretable:
+All three components are z-scored within season only (full league, all
+position groups together, as of the 2026-08-23 §22 fix -- see
+z_score_components()'s docstring for why the earlier season × position_group
+version was a real bug, not a design choice). This makes the final number
+directly interpretable:
 
-  DPVS-G = 0   → league average for that position group that season
+  DPVS-G = 0   → league average that season
   DPVS-G = +2  → two standard deviations above average — historically elite
 
 Three metric variants are computed:
@@ -38,8 +41,29 @@ from .positions import map_position
 # ── weights ────────────────────────────────────────────────────────────────────
 
 # DPVS-G
-_W_FULL    = {"tcs_z": 0.50, "idi_z": 0.30, "wowy_z": 0.20}
-_W_NO_WOWY = {"tcs_z": 0.60, "idi_z": 0.40}
+# 2026-08-23 TCS rebuild (position-weighted run/pass credit split, replacing
+# the flat tdgs/n_parts equal split -- see dpvs/position_credit.py and
+# docs/framework_decisions.md's TCS rebuild section): outer TCS/IDI blend
+# re-tuned via a 5x5 grid search (decay ratio x blend ratio, see
+# scripts/grid_search_tcs_blend.py and its data_output/tcs_grid_search_
+# results.csv) over docs/deferred/01_tcs_idi_blend_tuning.md's originally
+# scoped 0.20-0.40 TCS range. 0.25 TCS / 0.75 IDI chosen: team-clustering
+# and pooled YoY stability both degrade monotonically as TCS weight rises
+# (0.20 was marginally best on both, 0.25 a close second with meaningfully
+# better proxy-pool overlap -- see the grid results), and the decay ratio
+# itself showed low sensitivity across 0.5-0.8, so it's left at the user's
+# original 0.65 production value.
+#
+# WOWY is EXCLUDED from the primary DPVS-G composite entirely, not just
+# down-weighted -- per the user's explicit instruction this pass (pooled
+# YoY r=0.023 for wowy_z, near pure noise; see TCS_MECHANISM_EXPLAINED
+# §4.3-4.4). _compute_dpvs_g_row() below always uses the no-WOWY formula
+# now, regardless of whether wowy_z is available for a row -- there is no
+# more per-row WOWY/no-WOWY branch for DPVS-G specifically. _W_FULL is kept
+# only as a documented historical reference / for any future revisit; it is
+# no longer read by _compute_dpvs_g_row().
+_W_FULL    = {"tcs_z": 0.50, "idi_z": 0.30, "wowy_z": 0.20}  # historical, unused by DPVS-G as of 2026-08-23
+_W_NO_WOWY = {"tcs_z": 0.25, "idi_z": 0.75}
 
 # DPVS-A (individual-weighted)
 _WA_FULL    = {"tcs_z": 0.25, "idi_z": 0.50, "wowy_z": 0.25}
@@ -106,33 +130,49 @@ def compute_run_pass_context(game_df: pd.DataFrame) -> pd.DataFrame:
 
 def z_score_components(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Add tcs_z, idi_z, wowy_z columns to df by z-scoring within
-    (season × position_group). Z-scores are winsorized at ±4σ to prevent
-    single-player outliers (e.g., a card_back-sourced INT spike) from
-    compressing the entire distribution.
+    Add tcs_z, idi_z, wowy_z columns to df by z-scoring within season only
+    (full league, all position groups together). Z-scores are winsorized at
+    ±4σ to prevent single-player outliers (e.g., a card_back-sourced INT
+    spike) from compressing the entire distribution.
+
+    2026-08-23 (§22): changed from (season × position_group) to season-only.
+    The old position-grouped z-scoring reproduced the exact Donnie Shell
+    sack_component_z=4.0 bug one layer up: coverage has the smallest idi
+    standard deviation of the three position groups in 58/58 measurable
+    seasons (structural -- DBs rarely record sack/TFL/FF/FR), so the same
+    absolute gap-above-mean produced a much larger idi_z there than for
+    run_stopper/pass_rusher, and that's what actually put Shell's 1978 at
+    #2 overall (idi=0.750, a real, correctly-computed, position-blind
+    number, 2.5x lower than #1 Randy White's idi=1.833). Per the user's
+    explicit rule -- "There shouldn't be ANY z-score by position at all for
+    these stats... we don't care about position group at all" -- this
+    applies to the composite's outer z-scoring exactly as much as it did to
+    IDI's internal rate/count z-scoring (already fixed in idi.py, §20).
+    Position-group awareness stays confined to TCS's credit-ALLOCATION step
+    (dividing team defensive value among participants by position
+    responsibility, dpvs/position_credit.py) -- that's a different
+    mechanism the user has explicitly endorsed ("we assign game weights tho
+    for value that team players get from that group"), not a ranking
+    normalization step.
 
     df must already have: total_credit, idi, wowy_delta, position_group.
     """
     df = df.copy()
     for season, grp in df.groupby("season"):
-        for pg in df["position_group"].unique():
-            mask = (df["season"] == season) & (df["position_group"] == pg)
-            sub = df.loc[mask]
-            if sub.empty:
-                continue
-            df.loc[mask, "tcs_z"] = _zscore_within(sub["total_credit"]).clip(
+        idx = grp.index
+        df.loc[idx, "tcs_z"] = _zscore_within(grp["total_credit"]).clip(
+            -_WINSOR_SIGMA, _WINSOR_SIGMA
+        ).values
+        df.loc[idx, "idi_z"] = _zscore_within(grp["idi"]).clip(
+            -_WINSOR_SIGMA, _WINSOR_SIGMA
+        ).values
+        wo = grp["wowy_delta"].dropna()
+        if len(wo) >= 3:
+            # Only z-score WOWY if there are enough valid entries this season
+            df.loc[idx, "wowy_z"] = _zscore_within(grp["wowy_delta"]).clip(
                 -_WINSOR_SIGMA, _WINSOR_SIGMA
             ).values
-            df.loc[mask, "idi_z"] = _zscore_within(sub["idi"]).clip(
-                -_WINSOR_SIGMA, _WINSOR_SIGMA
-            ).values
-            wo = sub["wowy_delta"].dropna()
-            if len(wo) >= 3:
-                # Only z-score WOWY if there are enough valid entries in this group
-                df.loc[mask, "wowy_z"] = _zscore_within(sub["wowy_delta"]).clip(
-                    -_WINSOR_SIGMA, _WINSOR_SIGMA
-                ).values
-            # else leave wowy_z NaN → composite will use no-wowy weights
+        # else leave wowy_z NaN → composite will use no-wowy weights
 
     return df
 
@@ -140,21 +180,15 @@ def z_score_components(df: pd.DataFrame) -> pd.DataFrame:
 # ── composite ─────────────────────────────────────────────────────────────────
 
 def _compute_dpvs_g_row(row: pd.Series) -> float:
+    """DPVS-G primary composite. WOWY is deliberately never used here as of
+    the 2026-08-23 TCS rebuild -- see _W_NO_WOWY's comment above."""
     tcs_z  = row.get("tcs_z", np.nan)
     idi_z  = row.get("idi_z", np.nan)
-    wowy_z = row.get("wowy_z", np.nan)
 
     if pd.isna(tcs_z):
         return np.nan
     idi_z_safe = float(idi_z) if pd.notna(idi_z) else 0.0
 
-    if pd.notna(wowy_z):
-        return (
-            _W_FULL["tcs_z"]  * float(tcs_z)
-            + _W_FULL["idi_z"]  * idi_z_safe
-            + _W_FULL["wowy_z"] * float(wowy_z)
-        )
-    # No WOWY available — rebalance
     return (
         _W_NO_WOWY["tcs_z"] * float(tcs_z)
         + _W_NO_WOWY["idi_z"] * idi_z_safe
@@ -271,7 +305,7 @@ def build_composite(
       0. Deduplicate multi-position rows (same player, different pos code)
       1. Filter to min_games played (removes backup appearances on great teams)
       2. Assign position_group from pos column
-      3. Z-score TCS, IDI, WOWY within season × position_group
+      3. Z-score TCS, IDI, WOWY within season only (not position_group -- §22)
       4. Compute PTCS_z (positional run/pass context) if run_pass_ctx provided
       5. Compute DPVS-G, DPVS-A, DPVS-P
       6. Rank within season × position_group (by DPVS-G)
@@ -302,7 +336,7 @@ def build_composite(
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Z-scores for TCS, IDI, WOWY (within season × position_group, winsorized)
+    # Z-scores for TCS, IDI, WOWY (within season only, winsorized -- §22)
     df = z_score_components(df)
 
     # DPVS-G
