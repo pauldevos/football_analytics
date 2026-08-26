@@ -895,7 +895,7 @@ def load_pbp_tfl() -> pd.DataFrame:
     if "game_type" in df.columns:
         df = df[df["game_type"] == "regular"]
     df = df.groupby(["season", "franchise_id", "player"], as_index=False).agg(
-        tfl_count=("tfl", "sum"), n_obs=("games", "sum"),
+        tfl_count=("run_stuff", "sum"), n_obs=("games", "sum"),
     )
     df["team"] = df["franchise_id"].map(_FID_TO_TEAM)
     df = df.dropna(subset=["team"]).copy()

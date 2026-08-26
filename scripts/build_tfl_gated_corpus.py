@@ -146,7 +146,7 @@ def build(seasons: list[int]) -> pd.DataFrame:
             for rw in sec['rows']:
                 raw.append({
                     'season': season, 'fid': own_fid, 'name': rw['name'],
-                    'tfl': rw['tfl'], 'qualifies': qualifies,
+                    'tfl': rw['run_stuff'], 'qualifies': qualifies,
                 })
 
     print(f"  sides={total_sides} db_resolved={resolved_ct} qualifying={qual_ct}")
