@@ -10,7 +10,7 @@ doc is about the top-level component weights; this one is about how the
 
 ## The problem
 
-`dpvs/idi.py`'s `_add_rate_component()` (used for tackle/TFL/INT/FF)
+`dpvs/idi.py`'s `_add_rate_component()` (used for tackle/run stuff/INT/FF)
 computes each player-season's empirical-Bayes prior as a **sequential,
 prior-seasons-only** cumulative average:
 
@@ -21,9 +21,9 @@ prior_count = grp.transform(lambda s: s.shift(1).fillna(0).cumsum())
 prior_nobs  = grp_n.transform(lambda s: s.shift(1).fillna(0).cumsum())
 ```
 
-For J.J. Watt's 2012 season (21 TFL / 18 games, raw rate 1.167), this
+For J.J. Watt's 2012 season (21 run stuff / 18 games, raw rate 1.167), this
 produced a shrunk rate of 0.985 — pulled down because his ONLY prior
-evidence at that point was a modest 2011 (5 TFL / 17 games, rate 0.294).
+evidence at that point was a modest 2011 (5 run stuff / 17 games, rate 0.294).
 That specific case reads fine on its own (2011 genuinely was Watt's weaker,
 earlier-career season) — but the user identified that the *mechanism*
 generating it has two real, symmetric biases baked in:

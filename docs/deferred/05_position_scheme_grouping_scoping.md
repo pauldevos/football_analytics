@@ -48,13 +48,13 @@ classifier is a real way to catch them.
 
 | Scheme/Position | Responsibilities | Sample stat profile (season) | Example players |
 |---|---|---|---|
-| 3-4 NT | 85% run defense, 15% pass rush | 30-65 tackles, 3-5 sacks, 5-10 TFL | Ted Washington, Vince Wilfork, Curley Culp, Casey Hampton, Fred Smerlas, Michael Carter, Bob Baumhower (early NT who also rushed the passer — rare for a 0-technique) |
-| 3-4 DE | 40% run defense, 60% pass rush | 50-70 tackles, 5-10 sacks, 5-10 TFL | J.J. Watt, Bruce Smith, Howie Long, Lee Roy Selmon, Richard Seymour, Justin Smith, Calais Campbell, Elvin Bethea, Art Still, Doug Betters |
-| 3-4 OLB (edge rusher) | 80% pass rush, 15% run defense, 5% coverage | 40-55 tackles, 7-12 sacks, 5-10 TFL | Lawrence Taylor, Terrell Suggs, Kevin Greene, Greg Lloyd, T.J. Watt, Von Miller, Derrick Thomas, Andre Tippett, DeMarcus Ware, James Harrison |
-| 3-4 ILB/MLB | 70% run defense, 10% coverage, 20% pass rush (blitzing) | 80-120 tackles, 3-6 sacks, 5-10 TFL, 2-4 INT | Levon Kirkland, Ray Lewis, Pepper Johnson, Harry Carson, Randy Gradishar, Patrick Willis, Steve Nelson, Sam Mills |
-| 4-3 DE | 70% pass rush, 30% run defense | 50-75 tackles, 5-10 sacks, 5-10 TFL | Myles Garrett, Deacon Jones, Carl Eller, Chris Doleman, Charles Haley, Charles Mann, Jack Youngblood |
-| 4-3 MLB | 60% run defense, 20% coverage, 20% pass rush (blitzing) | 120-150 tackles, 1-2 sacks, 5-10 TFL, 1-3 INT | Bill Bergey, Dick Butkus, Mike Singletary, Willie Lanier, Brian Urlacher, Luke Kuechly, Nick Buoniconti, Tommy Nobis, Bobby Wagner |
-| 4-3 OLB | 50% run defense, 30% coverage, 20% pass rush | 80-120 tackles, 3-5 sacks, 5-10 TFL, 2-5 INT | Derrick Brooks, Lavonte David, Ed McDaniel, Bobby Bell, Jack Ham, Junior Seau, Ted Hendricks, Chuck Howley, Matt Blair, Wilber Marshall |
+| 3-4 NT | 85% run defense, 15% pass rush | 30-65 tackles, 3-5 sacks, 5-10 run stuff | Ted Washington, Vince Wilfork, Curley Culp, Casey Hampton, Fred Smerlas, Michael Carter, Bob Baumhower (early NT who also rushed the passer — rare for a 0-technique) |
+| 3-4 DE | 40% run defense, 60% pass rush | 50-70 tackles, 5-10 sacks, 5-10 run stuff | J.J. Watt, Bruce Smith, Howie Long, Lee Roy Selmon, Richard Seymour, Justin Smith, Calais Campbell, Elvin Bethea, Art Still, Doug Betters |
+| 3-4 OLB (edge rusher) | 80% pass rush, 15% run defense, 5% coverage | 40-55 tackles, 7-12 sacks, 5-10 run stuff | Lawrence Taylor, Terrell Suggs, Kevin Greene, Greg Lloyd, T.J. Watt, Von Miller, Derrick Thomas, Andre Tippett, DeMarcus Ware, James Harrison |
+| 3-4 ILB/MLB | 70% run defense, 10% coverage, 20% pass rush (blitzing) | 80-120 tackles, 3-6 sacks, 5-10 run stuff, 2-4 INT | Levon Kirkland, Ray Lewis, Pepper Johnson, Harry Carson, Randy Gradishar, Patrick Willis, Steve Nelson, Sam Mills |
+| 4-3 DE | 70% pass rush, 30% run defense | 50-75 tackles, 5-10 sacks, 5-10 run stuff | Myles Garrett, Deacon Jones, Carl Eller, Chris Doleman, Charles Haley, Charles Mann, Jack Youngblood |
+| 4-3 MLB | 60% run defense, 20% coverage, 20% pass rush (blitzing) | 120-150 tackles, 1-2 sacks, 5-10 run stuff, 1-3 INT | Bill Bergey, Dick Butkus, Mike Singletary, Willie Lanier, Brian Urlacher, Luke Kuechly, Nick Buoniconti, Tommy Nobis, Bobby Wagner |
+| 4-3 OLB | 50% run defense, 30% coverage, 20% pass rush | 80-120 tackles, 3-5 sacks, 5-10 run stuff, 2-5 INT | Derrick Brooks, Lavonte David, Ed McDaniel, Bobby Bell, Jack Ham, Junior Seau, Ted Hendricks, Chuck Howley, Matt Blair, Wilber Marshall |
 
 **Hybrid players**: real, but the exception, not the rule — the user's
 estimate is roughly 6-10 players per year genuinely moonlighting across two
@@ -66,7 +66,7 @@ minority (see the hybrid-identification section below).
 **Note**: this taxonomy doesn't cover a 4-3's two DT roles (1-technique
 run-stuffer vs. 3-technique penetrator) — the user didn't give that split
 explicitly. Worth asking for it, or inferring it from stat profile
-(TFL/sack-heavy = 3-technique, pure-volume/lower-sack = 1-technique) if a
+(run stuff/sack-heavy = 3-technique, pure-volume/lower-sack = 1-technique) if a
 future session needs that level of granularity.
 
 ## Feasibility validation already done — direct database evidence
@@ -148,7 +148,7 @@ before trusting either blindly.
    these.
 3. **Close the 3-4-OLB rush-vs-coverage gap** using the player's own stat
    profile as a secondary signal once the position×scheme join is in
-   place: within `3-4 OLB`, a player with a sack/TFL-heavy profile close to
+   place: within `3-4 OLB`, a player with a sack/run stuff-heavy profile close to
    the "80% pass rush" taxonomy row is the rush OLB; one with a heavier
    tackle/coverage profile is closer to what the 3-4 ILB/MLB row describes
    for coverage responsibility. This is the "hybrid-ness continuous score"

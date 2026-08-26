@@ -4,7 +4,7 @@ Completed 2026-08-22. Follows directly from
 `docs/deferred/04_event_value_results_20260822.md`, which measured
 interceptions as the single highest-value defensive event PFR's own
 expected-points data can support (**+3.58 EP**, pooled 1978-2025, highest
-of every category checked — sack 1.75, FR 1.67, TFL 1.10, tackle -0.36).
+of every category checked — sack 1.75, FR 1.67, run stuff 1.10, tackle -0.36).
 The user pushed back on the naive read of that number ("weight INT
 heavily") with a concrete, real counter-example pulled directly from PFR's
 own season stat pages: Scott Case (1988, 10 INT, AP 2nd-team All-Pro, zero

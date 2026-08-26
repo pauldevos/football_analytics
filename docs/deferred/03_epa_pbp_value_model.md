@@ -10,10 +10,10 @@ quick add-on.
 ## The problem
 
 Every defensive-value metric built so far in this project (TCS, IDI, DPVS-G)
-measures *credit for events* (a tackle, a TFL, a sack) without measuring
-*how much those events actually mattered* to the game's outcome. A TFL for
+measures *credit for events* (a tackle, a run stuff, a sack) without measuring
+*how much those events actually mattered* to the game's outcome. A run stuff for
 -3 yards on 1st-and-10 at your own 35 is a very different play than the same
-TFL on 1st-and-10 at the opponent's 20 — the second one costs the offense
+run stuff on 1st-and-10 at the opponent's 20 — the second one costs the offense
 much more expected value, because it happened much closer to a score. The
 project doesn't currently distinguish these.
 
@@ -26,12 +26,12 @@ expected_points(state before the play). A defensive player's contribution
 to a play can be credited with (some share of) that EPA swing.
 
 **Concrete example the user gave**: 1st-and-10 at your own 35 (65 yards to
-the end zone). A defender records a TFL for -3, making it 2nd-and-13 at the
+the end zone). A defender records a run stuff for -3, making it 2nd-and-13 at the
 32. If the pre-play expected value of that drive was 2.33 points and the
-post-play value is 2.25, that TFL is worth roughly −0.08 EPA (from the
-offense's perspective; +0.08 defensively). The same TFL near the goal line
+post-play value is 2.25, that run stuff is worth roughly −0.08 EPA (from the
+offense's perspective; +0.08 defensively). The same run stuff near the goal line
 — 1st-and-10 at the opponent's 20, pre-play expected value maybe 5.82,
-post-play maybe 5.22 after the same -3 yard TFL — would be worth roughly
+post-play maybe 5.22 after the same -3 yard run stuff — would be worth roughly
 0.60 EPA, a much bigger defensive contribution for an outwardly identical
 play (same down/distance/yards-lost). This is the whole point: raw stat
 counting can't distinguish these two plays, EPA can.

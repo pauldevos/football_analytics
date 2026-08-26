@@ -18,7 +18,7 @@ year after year. Others are mostly *luck* — this season's leader is often a
 different, unrelated player next season, because the stat is rare and
 whoever happened to be near the ball when it bounced free gets credit.
 `docs/framework_decisions.md` §12/§14 already measured this once, pooled
-across every position (tackle φ=4.87, TFL φ=2.69, INT φ=1.57, FF φ=1.32, FR
+across every position (tackle φ=4.87, run stuff φ=2.69, INT φ=1.57, FF φ=1.32, FR
 φ=1.08 — explained below). This task asks the same question **broken out
 by position group**, because "how noisy is a sack" is a different question
 for a defensive end than for a cornerback, and adds **sack** and **PD**
@@ -30,7 +30,7 @@ games-played counts.
 
 **Source**: `football_db` Postgres, `gold.player_game_stats` — one row per
 (player, game) with position and all seven counting stats (tackle, sack,
-TFL, FR, INT, PD, FF), reconciled from PFR (1978-2025) and the
+run stuff, FR, INT, PD, FF), reconciled from PFR (1978-2025) and the
 `gamebooks_boxscores` corpus (1967-1977, extending further for a few teams).
 For 1967-1977, only game-sides where
 `silver.player_game_stats_gamebook.completeness_qualified = true` were
@@ -42,7 +42,7 @@ of them resolved to one of the three position groups (`pass_rusher`,
 `run_stopper`, `coverage` — `dpvs/positions.py`'s current grouping; the
 finer DE-vs-LB split proposed in `docs/deferred/05_position_scheme_grouping_scoping.md`
 has not been built yet, so a supplementary ad-hoc finer split was run
-separately for the TFL question in §5 below, using the raw position string
+separately for the run stuff question in §5 below, using the raw position string
 already present in the data).
 
 **Three complementary methods, used for different reasons:**
@@ -70,7 +70,7 @@ already present in the data).
    that naive YoY correlation is biased low for sparse counts — a
    good-but-quiet season can look like a bad season simply from Poisson
    noise on a small numerator. φ and split-half (which pools more
-   observations per side) are the more trustworthy signal for FR/FF/INT/TFL
+   observations per side) are the more trustworthy signal for FR/FF/INT/run stuff
    specifically. Where YoY and φ/split-half disagree in this data, that
    disagreement itself is informative and is called out below.
 
@@ -97,9 +97,9 @@ for a one-time leaderboard.
 | Sack | run_stopper | 1.85 | moderate skill signal | 0.732 | 0.512 |
 | PD | run_stopper | 1.42 | weak-moderate skill signal | 0.703 | 0.461 |
 | PD | pass_rusher | 1.41 | weak-moderate skill signal | 0.712 | 0.464 |
-| TFL | run_stopper | 1.46 | weak skill signal | 0.602 | 0.339 |
-| TFL | coverage | 1.26 | weak skill signal | 0.517 | 0.251 |
-| TFL | pass_rusher | 1.33 | weak skill signal | 0.518 | 0.258 |
+| run stuff | run_stopper | 1.46 | weak skill signal | 0.602 | 0.339 |
+| run stuff | coverage | 1.26 | weak skill signal | 0.517 | 0.251 |
+| run stuff | pass_rusher | 1.33 | weak skill signal | 0.518 | 0.258 |
 | INT | coverage | 1.21 | weak skill signal | 0.644 | 0.313 |
 | FF | pass_rusher | 1.19 | very weak — near chance | 0.486 | 0.264 |
 | Sack | coverage | 1.16 | near chance (rare blitz sacks) | 0.503 | 0.241 |
@@ -139,7 +139,7 @@ than picking one.
   chance (φ=1.16) — a defensive back's occasional sack looks like scheme
   luck, not individual pass-rush skill, which is exactly what football
   intuition would predict.
-- **TFL** is weak-but-real everywhere (φ 1.26-1.46), and — unexpectedly —
+- **run stuff** is weak-but-real everywhere (φ 1.26-1.46), and — unexpectedly —
   is **not** stronger for the run-stopper group than for pass-rusher or
   coverage the way the pooled §12/§14 number (φ=2.69) implied. This gets
   its own dedicated section (§5) because it's the direct evidence input to
@@ -156,16 +156,16 @@ than picking one.
   correctly refused to produce a ranked list for it (see `_skill_leaderboard`'s
   `phi <= 1.0` guard) rather than rank players on pure noise.
 
-## 5. The DL-vs-LB TFL hypothesis (direct input to doc 04)
+## 5. The DL-vs-LB Run Stuff hypothesis (direct input to doc 04)
 
 `docs/deferred/04_idi_weight_revisit.md` records a specific, falsifiable
-claim from the user: a DT/DE's TFL should show a *stronger* skill signal
+claim from the user: a DT/DE's run stuff should show a *stronger* skill signal
 than an OLB/MLB's, because interior/edge linemen "win the battle" with a
-physical/positional head start, while a linebacker's TFL is more often a
+physical/positional head start, while a linebacker's run stuff is more often a
 scheme/blitz-design outcome. The current 3-group system can't test this
 directly (`pass_rusher` = DE+OLB together; `run_stopper` = DT/NT+all LB
 together), so this was tested with a one-off finer split of the raw
-position string, TFL only:
+position string, run stuff only:
 
 | Fine position group | n seasons | φ | Split-half r (S-B) | YoY r |
 |---|---|---|---|---|
@@ -175,21 +175,21 @@ position string, TFL only:
 | DT/NT (interior) | 6,492 | 1.28 | 0.516 | 0.294 |
 
 **The data does not support the hypothesis as stated — it points the
-other way.** Off-ball linebackers (MLB/ILB) show the *strongest* TFL skill
+other way.** Off-ball linebackers (MLB/ILB) show the *strongest* run stuff skill
 signal of the four groups on both independent metrics (φ and split-half),
 not the weakest, and defensive ends show the weakest. A plausible
 explanation, offered as a hypothesis for whoever picks up doc 04, not a
 proven mechanism: an MLB/ILB reads the play and is often unblocked at the
 snap read, giving a fast, instinctive player a repeatable individual edge;
-a DE's TFL count is more entangled with the whole defensive line's
+a DE's run stuff count is more entangled with the whole defensive line's
 pass-rush push and stunt calls, which would suppress the individual signal
 relative to team scheme — arguably the mirror image of the reasoning in
 doc 04, not a confirmation of it. **This is worth flagging plainly to doc
 04's next reader: the specific DL-vs-LB direction proposed there is not
-borne out by this measurement**, though the broader "TFL carries real
+borne out by this measurement**, though the broader "run stuff carries real
 signal, worth weighting" conclusion still stands. Caveats: OLB's sample
 (1,504 seasons) is much smaller than the others, and this fine split mixes
-TFL data across all three source eras (1967-77 gamebook-gated, 1978-98 PFR
+run stuff data across all three source eras (1967-77 gamebook-gated, 1978-98 PFR
 PBP undercount, 1999+ gold) the same way the main 3-group analysis does, so
 era-mix effects aren't ruled out as a contributor — a season-controlled
 re-run would be the natural next check if this number needs to bear real
@@ -236,10 +236,10 @@ average), Bill Simpson (4.43), Jake Scott (4.10), Ken Stone (3.98),
 Deron Cherry (3.93). Ed Reed at the top matches broad football consensus —
 a good sign the method isn't producing nonsense.
 
-**TFL, pass_rusher** (top 5): J.J. Watt (z=5.49), Deacon Jones (5.27),
+**Run stuff, pass_rusher** (top 5): J.J. Watt (z=5.49), Deacon Jones (5.27),
 Maxx Crosby (4.95), Dave Lewis (4.42), Michael Bennett (4.29).
 
-**TFL, run_stopper** (top 5): Wally Chambers (z=4.87, only 20 career
+**Run stuff, run_stopper** (top 5): Wally Chambers (z=4.87, only 20 career
 games — a short, extreme peak worth a grain of salt), Lavonte David (4.59),
 Luke Kuechly (4.42), Aaron Donald (3.98), Earl Holmes (3.76).
 
@@ -309,15 +309,15 @@ bound on the true per-game rate, not a precise value.
 2. **Sack has real, moderate, position-dependent skill signal (φ≈1.85-1.90
    for the two pass-rushing groups)** — enough to justify doc 04's planned
    move of `sack_share_z` onto the same rate+shrinkage+count treatment as
-   TFL/INT/FF, using `k = 8.0/(1.9-1) ≈ 8.9` as a starting point for the
+   run stuff/INT/FF, using `k = 8.0/(1.9-1) ≈ 8.9` as a starting point for the
    pass-rush-relevant groups. It is clearly weaker than tackle and roughly
-   comparable to TFL, consistent with the user's "more additive"
+   comparable to run stuff, consistent with the user's "more additive"
    intuition — it should not be treated as equal-confidence to tackle.
-3. **The specific DL-vs-LB TFL argument in doc 04 is not supported by this
+3. **The specific DL-vs-LB run stuff argument in doc 04 is not supported by this
    measurement — the data points the opposite direction** (MLB/ILB
    φ=1.50 > OLB 1.34 > DE 1.30 > DT/NT 1.28). Doc 04 should not lean on
-   that argument to justify raising TFL's weight over sack without
-   revisiting it; the general "TFL carries real, if modest, individual
+   that argument to justify raising run stuff's weight over sack without
+   revisiting it; the general "run stuff carries real, if modest, individual
    skill signal" conclusion (φ 1.26-1.46 across all three groups, clearly
    above the chance floor) still stands on its own.
 4. **PD is a plausible future IDI component (φ up to 2.02) but should not

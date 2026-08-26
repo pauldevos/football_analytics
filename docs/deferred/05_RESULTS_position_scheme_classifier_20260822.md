@@ -132,7 +132,7 @@ Doc 05 item 3 asked for a secondary signal to distinguish a 3-4's primary
 edge rusher from a more coverage-oriented OLB, since `L`/`R` in the raw
 position string encodes formation side, not role. A `sub_role` tag
 (`rush_leaning` / `coverage_leaning`) was added within the `3-4 OLB (edge)`
-bucket only, using each player-season's own (sack + TFL) per-game rate from
+bucket only, using each player-season's own (sack + run stuff) per-game rate from
 `gold.player_game_stats`: **n=1,494, median 0.50/game, mean 0.57/game,
 p25=0.33, p75=0.77** — split at the median. This is a continuous signal
 collapsed to a documented threshold for readability, not a hard taxonomy

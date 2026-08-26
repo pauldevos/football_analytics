@@ -329,7 +329,7 @@ Counterintuitive: QBs are more consistent season-to-season than defenses. This h
 
 ---
 
-## 11. IDI Reweight — TFL Added, FR Dropped (2026-08-21)
+## 11. IDI Reweight — Run Stuff Added, FR Dropped (2026-08-21)
 
 **Motivation:** A YoY stability audit of IDI's five raw-count share components (via
 variance-decomposition + career split-half reliability, stripping position-group
@@ -338,40 +338,40 @@ baseline-rate confound, on raw counts normalized per game from
 
 | Component | Adjusted split-half r |
 |---|---|
-| TFL | **0.76** (strongest of everything tested — not in IDI's formula at all) |
+| run stuff | **0.76** (strongest of everything tested — not in IDI's formula at all) |
 | INT | 0.57 |
 | FF | 0.45 |
 | Tackle | 0.61–0.71 (within position_group; from an earlier pass this session) |
 | Sack | 0.28–0.56 |
 | **FR** | **0.22** (closest to pure chance of any component) |
 
-Decision: drop FR entirely (weight → 0), add TFL as a new component, reweight
+Decision: drop FR entirely (weight → 0), add run stuff as a new component, reweight
 proportional to measured reliability.
 
 **New weights** (`_W_BASE` in `dpvs/idi.py`):
 ```
-IDI = 0.23·tackle_share + 0.26·tfl_share + 0.16·sack_share
+IDI = 0.23·tackle_share + 0.26·run_stuff_share + 0.16·sack_share
       + 0.20·int_share + 0.16·ff_share
 ```
-`tackle_share` and `tfl_share` are each independently present-or-absent per
+`tackle_share` and `run_stuff_share` are each independently present-or-absent per
 player-season; whichever are missing get dropped from `_W_BASE` and the rest
 renormalize proportionally (`_idi_row()` in `dpvs/idi.py` generalizes the
 old two-tier with/without-tackles pattern to both gated components).
 
-**TFL data sources** (see `dpvs/idi.py` module docstring for full detail):
+**Run stuff data sources** (see `dpvs/idi.py` module docstring for full detail):
 - **1967–1977**: `gamebooks_boxscores` repo's own 28-team corpus (real
-  per-game TFL read from rendered gamebook images), combined from its
+  per-game run stuff read from rendered gamebook images), combined from its
   existing `outputs/defensive_full_aggregate_1967_1975.csv` plus a direct
   parse of its 1976–1977 `boxscore.md` files (136 games; not yet in that
   repo's own aggregate output as of this addendum). Where corpus coverage
   for a player-season is a subset of games rather than the full schedule
-  (the large majority — see `tfl_coverage` below), the observed games' TFL
+  (the large majority — see `run_stuff_coverage` below), the observed games' run stuff
   rate is used as the season-level share estimate, with both numerator and
   denominator summed over the same game subset.
-- **1999+**: gold parquet's own `tfl` column (real PFR data; confirmed
+- **1999+**: gold parquet's own `run_stuff` column (real PFR data; confirmed
   ~0% populated 1967–1998 in this session's testing).
-- **1978–1998 has no TFL source at all** — a real, currently-unfilled gap
-  (PFR's own `pbp.csv`-derived TFL was evaluated and rejected as a source;
+- **1978–1998 has no run stuff source at all** — a real, currently-unfilled gap
+  (PFR's own `pbp.csv`-derived run stuff was evaluated and rejected as a source;
   see `gamebooks_boxscores/docs/experiments/2026-08-20_pfr_pbp_vs_gamebook_completeness/README.md`
   — it undercounts sacks by ~20% on verified elite pass-rusher seasons and
   scrambles tackler credit order relative to the source gamebook).
@@ -400,60 +400,60 @@ regression on both metrics.** Splitting by era shows why:
 
 | Era | IDI_z OLD | IDI_z NEW |
 |---|---|---|
-| 1967–1977 (gamebooks TFL, mostly partial-imputed small samples) | 0.313 | **0.171** |
-| 1978–1998 (no TFL; only the FR-drop + reweight applies) | 0.442 | **0.388** |
-| 1999–2024 (gold parquet TFL, full-season, real PFR data) | 0.368 | 0.364 |
+| 1967–1977 (gamebooks run stuff, mostly partial-imputed small samples) | 0.313 | **0.171** |
+| 1978–1998 (no run stuff; only the FR-drop + reweight applies) | 0.442 | **0.388** |
+| 1999–2024 (gold parquet run stuff, full-season, real PFR data) | 0.368 | 0.364 |
 
 Two distinct problems, not one:
-1. **1967–1977**: `tfl_share` computed from a handful of observed games (most
+1. **1967–1977**: `run_stuff_share` computed from a handful of observed games (most
    player-seasons here have `games_observed` in the low single digits) is a
-   noisy share estimate — a player with 1 TFL in 1 observed game can show
-   `tfl_share = 1.0`. This era drags the pooled number down the hardest.
-2. **1978–1998**: no TFL is involved at all here, yet stability still drops.
+   noisy share estimate — a player with 1 run stuff in 1 observed game can show
+   `run_stuff_share = 1.0`. This era drags the pooled number down the hardest.
+2. **1978–1998**: no run stuff is involved at all here, yet stability still drops.
    Proportionally redistributing FR's old 0.10 weight across the new base
    weights (rather than the old ones) shifts relative weight away from sack
    (moderate reliability) toward FF (lower reliability, 0.45) more than
    intended — the four-component fallback formula's *internal* proportions
    changed more than the FR-drop alone would justify.
-3. **1999–2024 (the clean case — full-season, real TFL, no imputation)**
-   shows essentially no change (0.368 → 0.364) despite TFL's 0.76 raw
-   split-half reliability. This suggests `tfl_share` (share of a team's
-   season TFL total, itself a fairly rare event — team totals are often in
-   the 30–40 range) behaves less reliably as a *share* statistic than TFL
+3. **1999–2024 (the clean case — full-season, real run stuff, no imputation)**
+   shows essentially no change (0.368 → 0.364) despite run stuff's 0.76 raw
+   split-half reliability. This suggests `run_stuff_share` (share of a team's
+   season run stuff total, itself a fairly rare event — team totals are often in
+   the 30–40 range) behaves less reliably as a *share* statistic than run stuff
    *rate normalized per game* did in the original component test — the two
    are not the same measurement, and the share transformation appears to
    erode most of the raw signal.
 
 **Read: implemented as specified, but not validated as an improvement.**
-Spot checks (J.J. Watt 2012 `idi_z`=3.71 off a 44% team-TFL share; Aaron
+Spot checks (J.J. Watt 2012 `idi_z`=3.71 off a 44% team-run stuff share; Aaron
 Donald 2018 `idi_z`=4.00, both career-best, plausible seasons) confirm
-nothing is structurally broken — TFL visibly moves rankings in the expected
-direction for known elite TFL producers. But the pooled-r validation this
+nothing is structurally broken — run stuff visibly moves rankings in the expected
+direction for known elite run stuff producers. But the pooled-r validation this
 session was explicitly asked to run says the reweight, as implemented, is a
 regression on the exact test that motivated dropping FR in the first place.
 Left in place uncommitted per this task's instructions; **recommend further
 tuning before treating this as the production formula** — candidates: a
-minimum-`games_observed` floor before trusting a gamebooks-era `tfl_share`
+minimum-`games_observed` floor before trusting a gamebooks-era `run_stuff_share`
 row (rather than using any single-game share), and revisiting whether
 `ff_share`'s weight should be capped independent of what's freed up by
 dropping FR, rather than a flat proportional redistribution.
 
 ---
 
-## 12. IDI Rebuild v2 — Rate + Volume Empirical-Bayes Components, Era-2 TFL Wired In (2026-08-21)
+## 12. IDI Rebuild v2 — Rate + Volume Empirical-Bayes Components, Era-2 Run Stuff Wired In (2026-08-21)
 
-**Motivation:** §11's TFL/FR reweight regressed pooled YoY stability
+**Motivation:** §11's run stuff/FR reweight regressed pooled YoY stability
 (IDI_z 0.386 → 0.343, composite no-WOWY 0.377 → 0.365) instead of improving
-it. Two root causes were diagnosed there: (1) 1967-1977 gamebooks TFL share
-came from tiny unfloored game samples (1 TFL in 1 observed game → share
-1.0); (2) TFL/INT/FF as *shares of team season total* are noisier than a
+it. Two root causes were diagnosed there: (1) 1967-1977 gamebooks run stuff share
+came from tiny unfloored game samples (1 run stuff in 1 observed game → share
+1.0); (2) run stuff/INT/FF as *shares of team season total* are noisier than a
 per-game rate, because team-level rare-event totals are themselves small.
-This pass fixes both, plus closes the 1978-1998 TFL gap that §11 left
+This pass fixes both, plus closes the 1978-1998 run stuff gap that §11 left
 entirely empty.
 
 **What changed in `dpvs/idi.py`:**
 
-1. **Completeness-gated TFL, 1967-1977.** `scripts/build_tfl_gated_corpus.py`
+1. **Completeness-gated run stuff, 1967-1977.** `scripts/build_tfl_gated_corpus.py`
    (new) reuses `gamebooks_boxscores/build_defensive_leaderboards.py`'s own
    completeness-ratio code directly (team Solo+Ast / opponent snaps ≥ 70%)
    rather than re-deriving it, applied per game-side across the full
@@ -462,24 +462,24 @@ entirely empty.
    included them). Output: `data_output/tfl_gamebooks_gated_1967_1977.csv`
    — season/team/player/tfl_sum/games_qualified, un-floored. `idi.py` then
    applies `MIN_GAMES_QUALIFIED_FLOOR = 4` at load time — below the floor,
-   TFL is simply absent for that player-season rather than forced from a
+   run stuff is simply absent for that player-season rather than forced from a
    1-2-game sample. A canonical-name-merge bug fix was also needed here:
    the base surname-merge logic (borrowed from `build_defensive_leaderboards.py`)
    didn't fold initial+surname variants ("J. Lambert") into their matching
    full name ("Jack Lambert") — added a same-initial merge rule, confirmed
-   on Jack Lambert 1976 (was fragmented 2+1+0+0 TFL across 4 name variants,
-   now 3 TFL / 10 games under one canonical row).
+   on Jack Lambert 1976 (was fragmented 2+1+0+0 run stuff across 4 name variants,
+   now 3 run stuff / 10 games under one canonical row).
 
-2. **1978-1998 TFL wired in for the first time** — previously a hard gap
-   (§11: "no TFL source at all"). Source: `gamebooks_boxscores`'
-   `pfr_pbp_defensive_stats_1978_2025.csv` (PFR play-by-play TFL parsing).
+2. **1978-1998 run stuff wired in for the first time** — previously a hard gap
+   (§11: "no run stuff source at all"). Source: `gamebooks_boxscores`'
+   `pfr_pbp_defensive_stats_1978_2025.csv` (PFR play-by-play run stuff parsing).
    This is a **confirmed undercount** (~20%+ low on verified elite
    pass-rusher seasons per that repo's own experiment writeup) — used
    because it's the only source for this 21-season gap, and every row it
    supplies is tagged `idi_tfl_source = "pfr_pbp_undercount_1978_1998"` so
    it is never silently equal-confidence to the other two eras.
 
-3. **Empirical-Bayes shrinkage on a per-game RATE (not share) for TFL,
+3. **Empirical-Bayes shrinkage on a per-game RATE (not share) for run stuff,
    INT, FF:**
    ```
    shrunk_rate = (n_obs·observed_rate + k·prior_rate) / (n_obs + k)
@@ -492,7 +492,7 @@ entirely empty.
 
    **k-value derivation:** this session's variance decomposition measured
    overdispersion `phi` (observed variance ÷ pure-chance/Poisson variance)
-   of **2.69 (TFL)**, **1.57 (INT)**, **1.32 (FF)** — TFL closest to a real,
+   of **2.69 (run stuff)**, **1.57 (INT)**, **1.32 (FF)** — run stuff closest to a real,
    repeatable individual signal, FF closest to chance (consistent with why
    FR, at φ≈1.08, was dropped entirely in §11). `phi − 1` is the "signal
    over the pure-chance floor," so `k` (prior pseudo-games) was set
@@ -505,7 +505,7 @@ entirely empty.
 
    | Stat | phi | phi−1 | k = 8.0/(phi−1) |
    |---|---|---|---|
-   | TFL | 2.69 | 1.69 | **4.73** |
+   | run stuff | 2.69 | 1.69 | **4.73** |
    | INT | 1.57 | 0.57 | **14.04** |
    | FF  | 1.32 | 0.32 | **25.00** |
 
@@ -517,7 +517,7 @@ entirely empty.
    session argues for a different split.
 
 5. **Scale-consistency fix (a judgment call beyond the literal brief):**
-   once TFL/INT/FF become z-scored composites (~N(0,1)) instead of shares
+   once run stuff/INT/FF become z-scored composites (~N(0,1)) instead of shares
    (~0.0–0.3), blending them against *raw* `tackle_share`/`sack_share` in
    one weighted sum would let the z-scored components dominate numerically
    before the stated weights even apply — a scale bug, not a modeling
@@ -535,11 +535,11 @@ entirely empty.
 
 **Weights unchanged from §11** (now applied to z-scored components):
 ```
-IDI = 0.23·tackle_share_z + 0.26·tfl_component_z + 0.16·sack_share_z
+IDI = 0.23·tackle_share_z + 0.26·run_stuff_component_z + 0.16·sack_share_z
       + 0.20·int_component_z + 0.16·ff_component_z
 ```
 
-**TFL coverage achieved** (`~/data/silver/dpvs_g_player_season.parquet`
+**Run stuff coverage achieved** (`~/data/silver/dpvs_g_player_season.parquet`
 rebuild, 1967–2024, 20,541 player-seasons — same row count as §11's build):
 
 | `idi_tfl_source` | Rows | Seasons |
@@ -549,9 +549,9 @@ rebuild, 1967–2024, 20,541 player-seasons — same row count as §11's build):
 | `gamebooks_boxscores_gated70pct` | 1,218 | 1967–1977 |
 | `none` | 1,898 | 1967–1998 (below floor / no match) |
 
-TFL coverage rose from 65% populated (§11) to **90.8%** populated, while the
+Run stuff coverage rose from 65% populated (§11) to **90.8%** populated, while the
 1967-1977 tier shrank from 2,788 rows (§11, unfloored) to 1,218 (floored) —
-the expected trade: fewer 1967-1977 player-seasons get a TFL number, but
+the expected trade: fewer 1967-1977 player-seasons get a run stuff number, but
 every one that does clears the 70%-completeness / ≥4-game bar instead of
 resting on a 1-2-game sample.
 
@@ -574,13 +574,13 @@ By era:
 
 | Era | IDI_z (v2) | Composite (v2) | n pairs |
 |---|---|---|---|
-| 1967–1977 (gamebooks TFL, gated) | 0.349 | 0.493 | 2,165 |
-| 1978–1998 (pbp TFL, undercount — newly added) | 0.493 | 0.424 | 5,175 |
-| 1999–2024 (gold TFL, clean/full-season) | 0.531 | 0.376 | 6,719 |
+| 1967–1977 (gamebooks run stuff, gated) | 0.349 | 0.493 | 2,165 |
+| 1978–1998 (pbp run stuff, undercount — newly added) | 0.493 | 0.424 | 5,175 |
+| 1999–2024 (gold run stuff, clean/full-season) | 0.531 | 0.376 | 6,719 |
 
 The 1999-2024 "clean" era — which §11 found essentially flat (0.368 → 0.364
-despite TFL's raw 0.76 split-half reliability) — moved to **0.531**,
-confirming §11's own diagnosis: the *share* transformation, not TFL itself,
+despite run stuff's raw 0.76 split-half reliability) — moved to **0.531**,
+confirming §11's own diagnosis: the *share* transformation, not run stuff itself,
 was eroding the signal. Moving to a per-player rate (shrunk + volume-
 blended) recovers it. 1967-1977 (0.349) is still the weakest era but is now
 back above the original pre-§11 baseline (0.313) rather than below it
@@ -591,18 +591,18 @@ counts remain its structural limit.
 **Spot checks** (`~/data/silver/dpvs_g_player_season.parquet`, all values
 observed directly, not simulated):
 
-| Player | Season | Era/tier | idi_z | dpvs_g | tfl_component_z | Notes |
+| Player | Season | Era/tier | idi_z | dpvs_g | run_stuff_component_z | Notes |
 |---|---|---|---|---|---|---|
-| J.J. Watt | 2012 | gold_1999plus | 2.98 | 1.65 | **4.00 (capped)** | 20.5-sack season; tfl/sack/tackle components all near or at the ±4σ winsor cap |
+| J.J. Watt | 2012 | gold_1999plus | 2.98 | 1.65 | **4.00 (capped)** | 20.5-sack season; run_stuff/sack/tackle components all near or at the ±4σ winsor cap |
 | Aaron Donald | 2018 | gold_1999plus | 3.20 | 1.13 | 4.00 (capped) | ff_component_z also capped at 4.00; dpvs_g held down by a below-average LAR tcs_z that season — expected, not a bug |
 | Luke Kuechly | 2013 | gold_1999plus | 2.13 | 2.11 | 1.79 | int_component_z 4.00 (capped); #1 run_stopper that season |
-| Brian Urlacher | 2005 | gold_1999plus | 2.23 | 2.07 | 3.85 | matches real TFL=17; #1 run_stopper |
+| Brian Urlacher | 2005 | gold_1999plus | 2.23 | 2.07 | 3.85 | matches real run stuff=17; #1 run_stopper |
 | Mike Singletary | 1985 | pfr_pbp_undercount | 0.61 | 1.63 | 1.28 | modest idi_z appropriately reflects the known Era-2 undercount; dpvs_g still solid on elite Bears tcs_z |
 | Mike Singletary | 1988 | pfr_pbp_undercount | 1.04 | 1.69 | 1.72 | same caveat, slightly stronger season |
-| Joe Greene | 1972 | gamebooks_gated70pct | 2.45 | 1.72 | 3.34 | matches real 9 TFL / 13 qualifying games |
-| Joe Greene | 1974 | gamebooks_gated70pct | 0.34 | 1.51 | 0.26 | correctly modest — real off-year, 4 TFL / 13 games |
-| Jack Lambert | 1976 | gamebooks_gated70pct | 2.29 | 2.17 | 1.19 | #1 run_stopper; TFL total now 3/10 games under one canonical name row (was fragmented 2+1+0+0 before the name-merge fix) — still short of the 5 originally quoted from an earlier, differently-sourced session count, flagged here rather than silently reconciled |
-| Randy Gradishar | 1978 | pfr_pbp_undercount | 1.20 | 1.55 | 1.27 | tackle_share_z is NaN (no comb_tackles/gamebook source that season/team) → `data_confidence = "low"`, weights rebalanced over the other 4 components; int_component_z 3.02 reflects his real 4 INT. Clean fit for the "elite MLB, zero sacks, real TFL+INT production" DPOY-hypothesis pattern — correctly surfaced despite the missing tackle-share input, not treated as a gap |
+| Joe Greene | 1972 | gamebooks_gated70pct | 2.45 | 1.72 | 3.34 | matches real 9 run stuff / 13 qualifying games |
+| Joe Greene | 1974 | gamebooks_gated70pct | 0.34 | 1.51 | 0.26 | correctly modest — real off-year, 4 run stuff / 13 games |
+| Jack Lambert | 1976 | gamebooks_gated70pct | 2.29 | 2.17 | 1.19 | #1 run_stopper; run stuff total now 3/10 games under one canonical name row (was fragmented 2+1+0+0 before the name-merge fix) — still short of the 5 originally quoted from an earlier, differently-sourced session count, flagged here rather than silently reconciled |
+| Randy Gradishar | 1978 | pfr_pbp_undercount | 1.20 | 1.55 | 1.27 | tackle_share_z is NaN (no comb_tackles/gamebook source that season/team) → `data_confidence = "low"`, weights rebalanced over the other 4 components; int_component_z 3.02 reflects his real 4 INT. Clean fit for the "elite MLB, zero sacks, real run stuff+INT production" DPOY-hypothesis pattern — correctly surfaced despite the missing tackle-share input, not treated as a gap |
 
 All nine originally-named players plus Gradishar come out sensibly
 elevated given their known real production, and the Era-2 undercount
@@ -614,7 +614,7 @@ on both metrics, in every era including the newly-added 1978-1998 span —
 not a marginal win but a clear one (IDI_z +27% over original baseline,
 +43% over §11). The scale-consistency fix (point 5) was necessary for the
 weights to mean what they say, not optional polish. Remaining honest
-caveats: (a) 1978-1998 TFL rests on a source known to undercount — the
+caveats: (a) 1978-1998 run stuff rests on a source known to undercount — the
 tier tag makes this legible per-row, but nothing here corrects the
 undercount itself; (b) 1967-1977's stability, while improved, is still the
 softest of the three eras, limited by how few qualifying games most
@@ -630,14 +630,14 @@ access to. Left uncommitted per this task's instructions.
 
 ---
 
-## 13. Roster-Based Name Canonicalization for the 1967-1977 TFL Corpus (2026-08-21)
+## 13. Roster-Based Name Canonicalization for the 1967-1977 Run Stuff Corpus (2026-08-21)
 
 The user supplied direct evidence that `gamebooks_v2` boxscore.md player
 names are severely format-fragmented corpus-wide — comma order ("Bergey,
 Bill" / "Bill Bergey" / "Bergey"), initials ("Adams, Julius" / "J. Adams"),
 jersey-number-only rows ("56"), sub/role markers ("Athas (sub)"), and
 OCR garbage ("Wilting Heashoff"). §12's own Lambert 1976 spot-check note
-(TFL "now 3/10 games... was fragmented 2+1+0+0 before the name-merge fix")
+(run stuff "now 3/10 games... was fragmented 2+1+0+0 before the name-merge fix")
 had already surfaced the mechanism: `build_tfl_gated_corpus.py`'s
 canonicalization block only merged a bare-surname/single-initial variant
 into a "full" name, and only when EXACTLY ONE such "full" variant existed
@@ -696,7 +696,7 @@ partially-working merge; the extra qualifying game came from "J.Lambert",
 which the old heuristic's initial-matching branch should have caught but
 a residual no-space "J.Lambert" token-splitting gap prevented — fixed in
 `roster_name_resolver.py`'s normalizer). This is still short of the 5
-TFL quoted from an earlier, differently-sourced session count — that
+run stuff quoted from an earlier, differently-sourced session count — that
 discrepancy remains flagged, not silently reconciled; nothing in this
 pass's evidence resolves it (both counts trace to different eras of
 manual boxscore.md reads, not to a mechanical bug found here).
@@ -725,7 +725,7 @@ back, so `tackle_share_z` is NaN for most 1967-1977 player-seasons, not
 just Gradishar's as the §12 note implied. This is a real, pre-existing gap
 — out of scope to fix here (it requires either regenerating the missing
 legacy CSV corpus or wiring IDI to read gamebooks_boxscores' boxscore.md
-data for tackle share the same way this pass just fixed for TFL), but
+data for tackle share the same way this pass just fixed for run stuff), but
 worth flagging plainly rather than leaving it looking like an isolated
 Gradishar-only caveat.
 
@@ -736,7 +736,7 @@ shrinkage unchanged from §12, `scripts/yoy_stability_check.py`):
 | Version | IDI_z pooled r | Composite (no-WOWY) pooled r |
 |---|---|---|
 | Original baseline | 0.386 | 0.377 |
-| §11 (TFL/FR reweight, no shrinkage) | 0.343 | 0.365 |
+| §11 (run stuff/FR reweight, no shrinkage) | 0.343 | 0.365 |
 | §12 (rate+volume shrinkage, name-fragmentation bug still present) | 0.490 | 0.411 |
 | §13 (this pass — roster-based name canonicalization) | 0.490 | 0.411 |
 
@@ -758,11 +758,11 @@ individual player-seasons directly rather than the pooled stability
 statistic.
 
 **Spot checks vs. §12** (all from the freshly rebuilt parquet; `idi_z` /
-`dpvs_g` / `tfl_component_z`):
+`dpvs_g` / `run_stuff_component_z`):
 
 | Player | Season | §12 idi_z → §13 idi_z | §12 dpvs_g → §13 dpvs_g | Notes |
 |---|---|---|---|---|
-| J.J. Watt | 2012 | 2.98 → 2.98 | 1.65 → 1.65 | 1999+ era, gold `tfl` column — untouched by this fix; unchanged |
+| J.J. Watt | 2012 | 2.98 → 2.98 | 1.65 → 1.65 | 1999+ era, gold `run_stuff` column — untouched by this fix; unchanged |
 | Aaron Donald | 2018 | 3.20 → 3.20 | 1.13 → 1.13 | same, unchanged |
 | Luke Kuechly | 2013 | 2.13 → 2.13 | 2.11 → 2.11 | same, unchanged |
 | Brian Urlacher | 2005 | 2.23 → 2.23 | 2.07 → 2.07 | same, unchanged |
@@ -771,13 +771,13 @@ statistic.
 | Derrick Brooks | 2002 | not in §12's table | **not present in the dataset at all** | pre-existing gap in the TCS/participation pipeline for early-2000s TB — not caused by, or fixed by, this pass; flagged, not chased |
 | Mike Singletary | 1985 | 0.61 → 0.62 | 1.63 → 1.63 | 1978-1998 pbp-undercount era, untouched by this fix; noise-level ripple only |
 | Mike Singletary | 1988 | 1.04 → 1.04 | 1.69 → 1.69 | same |
-| Joe Greene | 1972 | 2.45 → 2.36 | 1.72 → 1.68 | 1967-1977 era — small real shift from the corrected TFL corpus |
+| Joe Greene | 1972 | 2.45 → 2.36 | 1.72 → 1.68 | 1967-1977 era — small real shift from the corrected run stuff corpus |
 | Joe Greene | 1974 | 0.34 → 0.31 | 1.51 → 1.50 | same |
 | Jack Lambert | 1976 | 2.29 → 2.21 | 2.17 → 2.14 | see Lambert discussion above |
 | Randy Gradishar | 1978 | 1.20 → 1.18 | 1.55 → 1.54 | `data_confidence` still `low` (no tackle_share, see above) |
 
 **Verdict:** the name-fragmentation bug was real, corpus-wide (not just
-Lambert), and is now fixed for the TFL corpus specifically — 90% of raw
+Lambert), and is now fixed for the run stuff corpus specifically — 90% of raw
 names resolved to a unique roster player with no ambiguity, 4.8% more via
 first-name/initial disambiguation, and the remaining ~5% correctly left
 unmerged (ambiguous) or unmatched (garbage/roster-gap) rather than guessed.
@@ -790,7 +790,7 @@ fully resolved**: (a) `tackle_share_z` is unavailable for most
 1967-1977 player-seasons (see above — a real, separate gap, not a name
 problem); (b) the ~5% of names this pass correctly declined to guess on
 (ambiguous same-surname teammates, unmatched/garbage strings) means a
-small slice of real TFL production in that era is either split across an
+small slice of real run stuff production in that era is either split across an
 unmerged variant or entirely absent from any player's total — accurate
 by construction (no guessing), but not complete.
 
@@ -803,9 +803,9 @@ rewritten), `data_output/tfl_gamebooks_gated_1967_1977.csv` (rebuilt,
 ---
 
 ## 14. 1967-1977 tackle_share Wired In + a Franchise-Code Bug That Was
-    Silently Starving Both TFL and Tackle Coverage (2026-08-21)
+    Silently Starving Both run stuff and Tackle Coverage (2026-08-21)
 
-§13 checked (but didn't fix) a gap it found while working on TFL:
+§13 checked (but didn't fix) a gap it found while working on run stuff:
 `dpvs/idi.py`'s `load_all_gamebook_idi()` reads
 `~/data/gamebooks_processed/teams/{team}/seasons/{season}_defense.csv` —
 a path that does not exist on this machine at all — so `tackle_share_z`
@@ -828,15 +828,15 @@ clone of `build_tfl_gated_corpus.py` — same >=70% completeness-ratio gate
 not re-derived), same roster-based name canonicalization
 (`roster_name_resolver.py`'s `GamebookRosterCanonicalizer`, reused
 directly), same 1967-1977 range — but sums each qualifying game's
-Solo+Ast instead of TFL. Output: `data_output/tackle_gamebooks_gated_1967_1977.csv`,
+Solo+Ast instead of run stuff. Output: `data_output/tackle_gamebooks_gated_1967_1977.csv`,
 7,262 player-seasons (season, team, player, tackle_sum, games_qualified) —
-same row count as the TFL corpus, as expected (same underlying games/name
+same row count as the run stuff corpus, as expected (same underlying games/name
 resolution, different summed field).
 
-**Wired into `dpvs/idi.py` following the TFL/INT/FF pattern, not the
+**Wired into `dpvs/idi.py` following the run stuff/INT/FF pattern, not the
 older plain-share treatment:** the task brief asked for "the exact same
 shrinkage/z-scoring/gated-component pattern already established for
-TFL/FF/INT," which for 1967-1977 specifically means the rate+shrinkage+
+run stuff/FF/INT," which for 1967-1977 specifically means the rate+shrinkage+
 volume treatment (`_add_rate_component`: empirical-Bayes-shrunk per-game
 rate, 50/50-blended with a z-scored raw season count), not the plain
 share-then-z-score treatment §12 kept for `sack_share`/PFR `tackle_share`
@@ -849,10 +849,10 @@ untouched — the scale-consistency point from §12 still holds, since
 z-scoring happens within `season × position_group` either way, so no
 1967-1977 row ever mixes the two treatments). Needed a new `_PHI["tackle"]`
 entry: a quick quasi-Poisson dispersion estimate on the corpus (same
-method-of-moments idea as the TFL/INT/FF phi values — season-pooled
+method-of-moments idea as the run stuff/INT/FF phi values — season-pooled
 population rate as mu, Pearson chi-square / (N-1)) gave phi=4.872, higher
-than TFL's 2.69 — i.e. under this same framework, tackle counts carry
-*more* individual-skill signal relative to pure chance than TFL does
+than run stuff's 2.69 — i.e. under this same framework, tackle counts carry
+*more* individual-skill signal relative to pure chance than run stuff does
 (intuitive: far more observations per game than a rare event), so tackle
 gets `k≈2.07`, the *least* shrinkage of the four rate components.
 
@@ -876,12 +876,12 @@ codes (`_normalize_gold_team`). Those two conventions disagree for **12 of
 `nor`->`no`, `nwe`->`ne`, `oti`->`ten`, `rai`->`lv`, `ram`->`lar`,
 `sdg`->`lac`, `sfo`->`sf`, `tam`->`tb` (confirmed directly against
 `gold.franchises`). Every one of those 12 franchises' entire gamebook-era
-TFL and tackle numerator silently never matched onto IDI at all — not
+run stuff and tackle numerator silently never matched onto IDI at all — not
 "NaN because the floor wasn't cleared," but NaN because the merge key
 never had a chance to match, for the Chiefs (Lanier), Raiders (the 1967
 front four topping that season's leaderboard), Rams, Cardinals, Colts,
 Packers, Saints, Patriots, Oilers/Titans, Chargers, 49ers, and Buccaneers,
-for the whole 1967-1977 span. This is what §13's own TFL rebuild had
+for the whole 1967-1977 span. This is what §13's own run stuff rebuild had
 already shipped with — undetected because none of its spot-check players
 (Greene/Lambert/Watt/Donald/Kuechly/Urlacher/Singletary/Gradishar) happen
 to play for an affected franchise.
@@ -911,10 +911,10 @@ the tackle corpus itself did — a reminder that a plausible-looking partial
 result (52.8%, already a 5x improvement over baseline) can still be
 hiding a mechanical bug rather than a genuine data-availability ceiling.
 
-**TFL coverage also jumped from the same fix** (not the focus of this
+**Run stuff coverage also jumped from the same fix** (not the focus of this
 task, but a direct side effect since both corpora shared the bug):
 `idi_tfl_source == "gamebooks_boxscores_gated70pct"` rows in 1967-1977
-rose from 1,218 (§12/§13's number, corpus-wide) to **2,256** — TFL
+rose from 1,218 (§12/§13's number, corpus-wide) to **2,256** — run stuff
 coverage for this era nearly doubled from a bug fix, not new data.
 
 **YoY stability re-check** (`scripts/yoy_stability_check.py`, full
@@ -923,7 +923,7 @@ rebuild each step):
 | Version | IDI_z pooled r | Composite (no-WOWY) pooled r | 1967-1977 IDI_z | 1967-1977 composite |
 |---|---|---|---|---|
 | §12 (rate+volume shrinkage) | 0.490 | 0.411 | n/a (not broken out identically) | n/a |
-| §13 (TFL name canonicalization) | 0.490 | 0.411 | 0.353 | 0.493 |
+| §13 (run stuff name canonicalization) | 0.490 | 0.411 | 0.353 | 0.493 |
 | This pass, tackle wired in, before franchise-code fix | 0.497 | 0.413 | 0.401 | 0.505 |
 | **This pass, final (franchise-code fix included)** | **0.502** | **0.413** | **0.433** | **0.502** |
 
@@ -944,8 +944,8 @@ build; `idi_z` / `dpvs_g` / `tackle_share_z` / `idi_tackle_source`):
 |---|---|---|---|---|
 | Joe Greene | 1972 | 0.80 | gamebooks_boxscores_gated70pct | idi_z=2.21, dpvs_g=1.62 — real career-best season, both up from §13 |
 | Joe Greene | 1974 | 0.39 | gamebooks_boxscores_gated70pct | idi_z=0.43 — correctly modest, real off-year |
-| Jack Lambert | 1976 | 2.89 | gamebooks_boxscores_gated70pct | idi_z=2.34, #1 run_stopper; tackle_share_z now among the highest in the dataset, matching his reputation directly rather than via TFL alone |
-| Randy Gradishar | 1978 | NaN | none | correctly out of scope — this fix is 1967-1977 only; 1978 still falls through to the PFR-pbp TFL era with no tackle source, exactly as §13 documented |
+| Jack Lambert | 1976 | 2.89 | gamebooks_boxscores_gated70pct | idi_z=2.34, #1 run_stopper; tackle_share_z now among the highest in the dataset, matching his reputation directly rather than via run stuff alone |
+| Randy Gradishar | 1978 | NaN | none | correctly out of scope — this fix is 1967-1977 only; 1978 still falls through to the PFR-pbp run stuff era with no tackle source, exactly as §13 documented |
 | Randy Gradishar | 1975-1977 | 2.26 / -0.06 / 2.20 | gamebooks_boxscores_gated70pct / gamebooks_boxscores_gated70pct / gamebook_stats_page | now populated for all three in-scope seasons; 1976 dip (4 qualifying games only) is a small-sample artifact, not a real dip — flagged, not smoothed over |
 | Willie Lanier | 1970-1976 | 1.08 to 3.28 (all 7 seasons) | gamebooks_boxscores_gated70pct | THE franchise-code bug's own discovery case — was NaN in every season before the fix despite being in the corpus CSV the whole time; now consistently elevated, matching his real reputation as a premier run-stopping MLB |
 | Nick Buoniconti | 1970-1974 | 0.94 to 2.99 (all 5 seasons) | gamebooks_boxscores_gated70pct | consistently elevated across his full Miami run, as expected for a "tackling machine" |
@@ -958,13 +958,13 @@ IDI formula, and the YoY-stability metric moved by a magnitude consistent
 with fixing a real availability gap (unlike §13, which fixed correctness
 without moving the aggregate number). The franchise-code bug is the more
 consequential finding of this pass: it was silently zeroing out 12 of 28
-franchises' worth of gamebook-sourced TFL *and* tackle data since §12
+franchises' worth of gamebook-sourced run stuff *and* tackle data since §12
 first shipped this corpus architecture, would not have been caught by any
 of this session's or §13's spot-check players (all from unaffected
 franchises), and was only surfaced because this task's brief specifically
 asked for a Willie Lanier check. **The 1967-1977 era of DPVS-G should now
 be considered solid enough to treat as finished for the current scope** —
-both of its gamebook-sourced components (TFL, tackle_share) are wired,
+both of its gamebook-sourced components (run stuff, tackle_share) are wired,
 gated, canonicalized, and now correctly matched across the full 28-team
 league, with remaining gaps (the ~14% of player-seasons below the
 4-qualifying-game floor, the ~5% of names §13 correctly declined to
@@ -1148,10 +1148,10 @@ full corpus, not introduced by this pass.
 
 | Component | Before | After | Still falls back to file when |
 |---|---|---|---|
-| 1967-1977 TFL | `data_output/tfl_gamebooks_gated_1967_1977.csv` | `silver.player_game_stats_gamebook` (same >=70% ratio gate, now a stored column not a recomputation) | Postgres unreachable |
+| 1967-1977 run stuff | `data_output/tfl_gamebooks_gated_1967_1977.csv` | `silver.player_game_stats_gamebook` (same >=70% ratio gate, now a stored column not a recomputation) | Postgres unreachable |
 | 1967-1977 tackle_share | `data_output/tackle_gamebooks_gated_1967_1977.csv` | same table | Postgres unreachable |
-| 1978-1998 TFL (undercount-tagged) | `gamebooks_boxscores/outputs/pfr_pbp_defensive_stats_1978_2025.csv` | `silver.player_game_stats_pfr` | Postgres unreachable |
-| sack_share / int / fr / ff / comb_tackles / tfl, 1967-2025 | `~/data/gold/player_season_card.parquet` (CLAUDE.md-superseded layer) | `gold.player_game_stats` | season < 1967 (no Postgres per-game source built) |
+| 1978-1998 run stuff (undercount-tagged) | `gamebooks_boxscores/outputs/pfr_pbp_defensive_stats_1978_2025.csv` | `silver.player_game_stats_pfr` | Postgres unreachable |
+| sack_share / int / fr / ff / comb_tackles / run_stuff, 1967-2025 | `~/data/gold/player_season_card.parquet` (CLAUDE.md-superseded layer) | `gold.player_game_stats` | season < 1967 (no Postgres per-game source built) |
 
 Each of the four rewired loaders (`load_gamebook_tfl_from_db()`,
 `load_gamebook_tackle_from_db()`, `load_pfr_tfl_from_db()`,
@@ -1188,7 +1188,7 @@ until added.
 **`gold.dpvs_g_player_season`** (new table, `football_db/schema/dpvs_g.sql`):
 composite score (`dpvs_g`/`dpvs_a`/`dpvs_p`) plus `tcs_z`/`idi`/`idi_z`/
 `wowy_z`, IDI's five z-scored components
-(`tackle_share_z`/`tfl_component_z`/`sack_share_z`/`int_component_z`/
+(`tackle_share_z`/`run_stuff_component_z`/`sack_share_z`/`int_component_z`/
 `ff_component_z`), the raw shares behind them, `position_group`, rank
 columns, and provenance/confidence tags. Loaded by new
 `scripts/load_dpvs_g_to_db.py` from the rebuilt
@@ -1201,7 +1201,7 @@ table). Full `TRUNCATE` + reload each run. 19,991 rows, 1967-2024.
 **End-to-end rebuild:** `scripts/build_dpvs_g.py --seasons 1967-2024` (via
 `football_analytics/.venv`, needed for `pyarrow`) ran clean against the new
 Postgres-backed sources: TCS 47,640 player-seasons, WOWY 33,453, IDI's gold
-stats 65,088 / gamebook tackle 2,800 / gamebook TFL 2,800 / PBP TFL 22,735
+stats 65,088 / gamebook tackle 2,800 / gamebook run stuff 2,800 / PBP run stuff 22,735
 (all four counts matched exactly what each new loader returned when tested
 standalone beforehand), final composite 19,991 player-seasons, 4,677 career
 summaries.
@@ -1410,7 +1410,7 @@ both names to a franchise → of those, **13,123 were genuinely different
 teams** (real takeaways) and **11,378 were the SAME team** (a teammate
 recovery, exactly the failure mode described above) → 2,779 unresolved
 (excluded, can't verify). After the primary-category priority filter
-(INT > sack > TFL > FR > tackle, same as the rest of this script), final
+(INT > sack > run stuff > FR > tackle, same as the rest of this script), final
 usable FR n dropped from 19,975 → **9,351** — roughly half the old sample,
 but now every single row is a verified possession change.
 
@@ -1421,7 +1421,7 @@ what the known bug predicted (diluted by non-turnover recoveries pulling
 the average down). Still somewhat below Burke's number, plausibly because
 his estimate is for fumbles broadly (including offense-recovers-own cases
 in a different comparison frame) rather than this script's strict
-before/after EP swing on a verified takeaway. INT/sack/TFL/tackle values
+before/after EP swing on a verified takeaway. INT/sack/run stuff/tackle values
 were re-verified unchanged by this fix (+3.580/+1.746/+1.098/-0.358 —
 identical to the original doc, confirming nothing else in the script was
 touched). **FR itself is not used below** — it remains dropped from IDI
@@ -1439,7 +1439,7 @@ components:
 | INT | +3.580 | 0.4076 |
 | FF | +2.359 | 0.2686 |
 | Sack | +1.746 | 0.1988 |
-| TFL | +1.098 | 0.1250 |
+| run stuff | +1.098 | 0.1250 |
 
 **Tackle is handled differently, deliberately — not value-proportional.**
 Its own measured event value is **-0.36 EP**, a real finding (a "routine"
@@ -1450,7 +1450,7 @@ plugging in a negative or zero weight would be thoughtless, not rigorous.
 Given the brief's own framing (treat tackle's IDI role as
 participation/volume rather than value creation), tackle gets a **small,
 fixed weight of 0.10** — chosen specifically to sit *below* every
-value-derived component's own weight (the smallest, TFL, still clears
+value-derived component's own weight (the smallest, run stuff, still clears
 0.90×0.1250=0.1125), so a pure workload signal can never outweigh a stat
 that reliably creates real defensive value, which is exactly what tackle's
 own -0.36 says it structurally does not do. The remaining four weights are
@@ -1458,12 +1458,12 @@ rescaled to the leftover 0.90 of the budget, preserving their
 value-proportional ratios:
 
 ```
-IDI = 0.10·tackle_share_z + 0.113·tfl_component_z + 0.179·sack_share_z
+IDI = 0.10·tackle_share_z + 0.113·run_stuff_component_z + 0.179·sack_share_z
       + 0.367·int_component_z + 0.242·ff_component_z
 ```
 
 vs. the §11 weights `0.23/0.26/0.16/0.20/0.16`. Net effect: tackle drops
-by more than half (0.23→0.10), TFL also drops (0.26→0.113 — TFL's real
+by more than half (0.23→0.10), run stuff also drops (0.26→0.113 — run stuff's real
 value is positive and non-trivial, but INT and FF are simply worth far
 more per event, and a strict value-proportional split among the four
 genuine-disruption stats has to reflect that), sack rises modestly
@@ -1474,27 +1474,27 @@ spot-check section below for what it actually does to real players'
 scores.
 
 `docs/deferred/02_RESULTS_stat_noise_skill_rating_analysis.md`'s
-position-split DL-vs-LB TFL test (run earlier this session, direct input
-to this doc) is **not** used to further adjust TFL's weight here — that
-test found the opposite of the user's original hypothesis (MLB/ILB TFL
+position-split DL-vs-LB run stuff test (run earlier this session, direct input
+to this doc) is **not** used to further adjust run stuff's weight here — that
+test found the opposite of the user's original hypothesis (MLB/ILB run stuff
 shows the *strongest* skill signal, not DE/DT), so there's no position-split
-evidence supporting an extra TFL boost. The general "TFL carries real,
+evidence supporting an extra run stuff boost. The general "run stuff carries real,
 if modest, signal" conclusion from that doc still stands and is reflected
-in TFL keeping a real (if reduced) weight above zero.
+in run stuff keeping a real (if reduced) weight above zero.
 
 ### Step 3 — sack_share_z rate+shrinkage fix
 
 Per doc 04's second open item: `sack_share_z` was the only one of the five
 components still computed as a raw team-season share
 (`sk / team_sk`), z-scored directly — it never got the
-rate+shrinkage+volume treatment (`_add_rate_component`) TFL/INT/FF
+rate+shrinkage+volume treatment (`_add_rate_component`) run stuff/INT/FF
 received in the §12 rebuild, despite the user's own standing "more
 additive" intuition about sacks.
 
 **Sack's own φ had never been measured pooled (only per-position, in
 `docs/deferred/02_RESULTS_stat_noise_skill_rating_analysis.md`: 1.85-1.90
 for the two pass-rushing groups, 1.16 for coverage).** Measured now with
-the exact same method used for TFL/INT/FF's existing pooled `_PHI` values
+the exact same method used for run stuff/INT/FF's existing pooled `_PHI` values
 (method-of-moments quasi-Poisson, season-pooled population rate as μ,
 Pearson χ²/(N−n_seasons), unfloored, all positions pooled together —
 confirmed as the right comparison method by reproducing tackle's own
@@ -1502,9 +1502,9 @@ documented 4.872 exactly when the same method is restricted to its 1967-
 1977 gated corpus): **phi_sack = 2.126** (65,282 player-seasons,
 `football_db` `gold.player_game_stats`, same >=70%-completeness gate as
 the rest of this project's 1967-1977 portion). This sits between
-FF/INT (near pure chance) and TFL (2.69) — real, moderate, individual
+FF/INT (near pure chance) and run stuff (2.69) — real, moderate, individual
 skill signal, consistent with the position-split numbers and with the
-user's own "more additive... roughly comparable to TFL" read that started
+user's own "more additive... roughly comparable to run stuff" read that started
 this whole revisit.
 
 `k_sack = 8.0/(2.126-1.0) ≈ 7.10` — added to `dpvs/idi.py`'s `_PHI`/`_K`
@@ -1545,7 +1545,7 @@ outcome to report. The move here happens to be positive; that's reported
 as-is; it is not treated as the point.
 
 By era: 1967-1977 IDI_z r=0.424 (down slightly from §17's implicit era
-split — 1967-1977 leans most heavily on the gamebook tackle/TFL corpus,
+split — 1967-1977 leans most heavily on the gamebook tackle/run stuff corpus,
 so a lower tackle weight has more relative effect there), 1978-1998
 r=0.521, 1999-2024 r=0.502 (both roughly flat to slightly up vs. baseline
 era numbers).
@@ -1554,7 +1554,7 @@ era numbers).
 
 Compared old-weight IDI_z against new-weight IDI_z for the same players,
 recomputed directly from the saved z-components (`tackle_share_z`,
-`tfl_component_z`, `int_component_z`, `ff_component_z` are computed
+`run_stuff_component_z`, `int_component_z`, `ff_component_z` are computed
 identically either way; only `sack_share_z`'s source and the top-level
 weights differ) — an apples-to-apples before/after on the same build, not
 a second full rebuild:
@@ -1589,11 +1589,11 @@ broken. The pattern is exactly what the weight math predicts, stated
 plainly rather than smoothed over: **turnover-heavy defensive backs
 (Woodson, Reed) gain substantially** (+0.84 to +1.38) now that INT carries
 real value-derived weight instead of a diluted 0.20 share of five roughly
-equal components; **volume/TFL-heavy front-seven players who lean less on
+equal components; **volume/run stuff-heavy front-seven players who lean less on
 turnovers lose ground** (Watt -1.08, Urlacher -0.63, Singletary -0.41/-0.78)
-— driven mostly by tackle's weight more than halving and TFL's weight
+— driven mostly by tackle's weight more than halving and run stuff's weight
 dropping even more (0.26→0.113), since edge/interior disruption in this
-dataset correlates more with tackle/TFL volume than with takeaways.
+dataset correlates more with tackle/run stuff volume than with takeaways.
 Turnover-heavy off-ball backers (Ray Lewis, both seasons) still gain,
 because their INT numbers are also well above peer average, not despite
 the reweight but because of it. **This is the intended, direct consequence
@@ -1874,7 +1874,7 @@ player_season` (reloaded). Left uncommitted per this task's instructions.
 **Trigger, the user's own words verbatim:** *"There shouldn't be ANY z-score
 by position at all for these stats. 18 sacks is better than 12 sacks, end
 of story, I don't care if it's the Kicker getting the sacks. We do care
-about the event value though, again, Sacks, TFL, Tackles in order."*
+about the event value though, again, Sacks, run stuff, Tackles in order."*
 
 **The bug this fixes:** Donnie Shell (SS, PIT 1978) was found with
 `sack_component_z = 4.0` — the winsorized maximum — because IDI's five
@@ -1892,7 +1892,7 @@ every season).
 `tackle_share_z` assignment in `compute_idi()` all changed from
 `_zscore_within_groups(..., ["season", "_idi_pos_group"])` to
 `_zscore_within_groups(..., ["season"])`. Every count-based component
-(tackle, TFL, sack, INT, FF, FR) now compares a player's shrunk rate and
+(tackle, run stuff, sack, INT, FF, FR) now compares a player's shrunk rate and
 raw count against the **whole league** that season, not same-position
 peers.
 
@@ -1925,7 +1925,7 @@ original reason for dropping FR entirely — `phi_fr = 1.08` (pooled, all
 positions), the closest of any of these stats to the pure-chance floor,
 i.e. almost no repeatable individual skill signal — still stands and is
 handled correctly this time: FR gets the exact same rate+shrinkage+volume
-treatment as TFL/INT/FF/sack (`_add_rate_component`), with
+treatment as run stuff/INT/FF/sack (`_add_rate_component`), with
 `k_fr = 8.0/(1.08-1.0) = 100.0` — by far the largest `k` of any component,
 meaning a player's FR component leans almost entirely on the
 population/career prior rather than one season's recovery luck. Not a
@@ -1947,8 +1947,8 @@ answer":
 
 | Component | User's range | Chosen | Reasoning for the specific point |
 |---|---|---|---|
-| Sack | 0.25–0.40 | 0.30 | Mid-low: the ceiling (0.40) would let sacks alone outweigh every other component combined; 0.30 keeps sacks clearly the largest single weight (per "Sacks, TFL, Tackles" ordering) without swamping the rest |
-| TFL | 0.20–0.35 | 0.25 | Midpoint |
+| Sack | 0.25–0.40 | 0.30 | Mid-low: the ceiling (0.40) would let sacks alone outweigh every other component combined; 0.30 keeps sacks clearly the largest single weight (per "Sacks, run stuff, Tackles" ordering) without swamping the rest |
+| run stuff | 0.20–0.35 | 0.25 | Midpoint |
 | Tackle | 0.15–0.25 | 0.20 | Upper end of its range — reflects "Tackles" still being named third in the user's explicit value ordering, not merely a participation signal (§18's treatment, now superseded) |
 | FF | 0.10–0.15 | 0.125 | Midpoint |
 | INT | 0.12 (fixed) | 0.12 | User-specified exactly |
@@ -1959,13 +1959,13 @@ by dividing through by 1.115 so the six weights sum to 1.000 while
 preserving the chosen ratios exactly:
 
 ```
-IDI = 0.179·tackle_share_z + 0.224·tfl_component_z + 0.269·sack_component_z
+IDI = 0.179·tackle_share_z + 0.224·run_stuff_component_z + 0.269·sack_component_z
       + 0.108·int_component_z + 0.112·ff_component_z + 0.108·fr_component_z
 ```
 
 vs. §18/§19's `0.10/0.113/0.179/0.367/0.242` (five components, no FR).
-Net effect: sack and TFL both rise substantially (sack becomes the single
-largest weight, 0.179→0.269; TFL 0.113→0.224), tackle roughly doubles
+Net effect: sack and run stuff both rise substantially (sack becomes the single
+largest weight, 0.179→0.269; run stuff 0.113→0.224), tackle roughly doubles
 (0.10→0.179), INT drops sharply (0.367→0.108 — INT was §18's dominant
 value-derived weight and is now just one of six roughly-comparable
 weights), FF drops (0.242→0.112), FR enters at 0.108. This is the direct,
@@ -1982,7 +1982,7 @@ before/after, since — unlike §18's sack-only change — every component's
 z-scoring group changed this pass, so a pure column-algebra recompute from
 saved z's wasn't possible:
 
-| | tackle_share_z | tfl_component_z | **sack_component_z** | int_component_z | ff_component_z | fr_component_z | idi |
+| | tackle_share_z | run_stuff_component_z | **sack_component_z** | int_component_z | ff_component_z | fr_component_z | idi |
 |---|---|---|---|---|---|---|---|
 | BEFORE (season×position_group) | +1.664 | -0.189 | **+4.000** | -0.254 | +2.850 | n/a (dropped) | 1.456 |
 | AFTER (season-only, this pass) | +1.374 | -0.663 | **+0.237** | +0.670 | +2.035 | +2.409 | 0.721 |
@@ -1991,7 +1991,7 @@ saved z's wasn't possible:
 unremarkable, exactly the fix intended. Production build (real full
 1967-2024 rebuild with the correct pre-2001 tackle-opportunity-ratio table,
 loaded into `gold.dpvs_g_player_season`) confirms the same order of
-magnitude: `tackle_share_z=+1.374, tfl_component_z=-0.663,
+magnitude: `tackle_share_z=+1.374, run_stuff_component_z=-0.663,
 sack_component_z=+0.237, int_component_z=+0.670, ff_component_z=+2.035,
 fr_component_z=+2.409`, `idi=0.721`, **`idi_z=2.871`, `dpvs_g=2.343`**.
 
@@ -2021,20 +2021,20 @@ layers, not a residual IDI artifact.)
 
 Using `data_output/validation_fixtures/2024_pit_at_den_official_boxscore.csv`
 (a single real game) alongside each player's real full 2024 season totals
-(`g`, `sk`, `tfl`, `ff`, `fr` from `load_gold_stats([2024])` — this specific
+(`g`, `sk`, `run_stuff`, `ff`, `fr` from `load_gold_stats([2024])` — this specific
 game is one of the games folded into these season totals) to make the
 mechanism concrete:
 
-**T.J. Watt** — this game: 1.0 sack, 2 TFL, 3 comb tackles, 0 FF, 0 FR, 2
+**T.J. Watt** — this game: 1.0 sack, 2 run stuff, 3 comb tackles, 0 FF, 0 FR, 2
 QB hits (QB hits aren't an IDI input). 2024 season (17 games): 10 sacks, 6
-TFL, 44 comb tackles, 7 FF, 3 FR. `sack_component_z` blends
+run stuff, 44 comb tackles, 7 FF, 3 FR. `sack_component_z` blends
 `0.5·z(shrunk_rate)` — `shrunk_rate = (17·(10/17) + 7.10·prior)/(17+7.10)`,
 prior pulled toward Watt's own strong career sack rate — with
 `0.5·z(raw count=10)`, both now z-scored against the WHOLE 2024 league
 (not just LB/edge peers): **sack_component_z=+3.667**, still a clear
 standout (10 sacks is rare leaguewide, not just among edge rushers) but no
 longer inflated by a thin position-only comparison pool.
-`tfl_component_z=+1.905`, `ff_component_z=+4.000` (winsorized — 7 FF is
+`run_stuff_component_z=+1.905`, `ff_component_z=+4.000` (winsorized — 7 FF is
 extreme even pooled leaguewide), `fr_component_z=+2.926`,
 `int_component_z=-0.436` (no INTs, as expected for an edge player — now
 correctly compared to a whole-league population dominated by non-INT
@@ -2043,11 +2043,11 @@ Watt reads as a clear top-tier disruptor, driven by real sack/FF volume,
 not a position-pool artifact.
 
 **Cameron Heyward** — this game: 0 sacks, 3 comb tackles, 3 QB hits, 0
-TFL/FF. 2024 season (18 games): 6 sacks, 7 TFL, 69 comb tackles, 0 FF, 0
+run stuff/FF. 2024 season (18 games): 6 sacks, 7 run stuff, 69 comb tackles, 0 FF, 0
 FR. `sack_component_z=+1.840` (6 sacks from an interior DT is well above
 the pooled-leaguewide rate, even though it's modest for an edge rusher —
 exactly the point of pooling: a DT's 6 sacks now reads on its own merits,
-not "how does this compare to other DTs"). `tfl_component_z=+2.209` (7 TFL
+not "how does this compare to other DTs"). `run_stuff_component_z=+2.209` (7 run stuff
 is a real, substantial number pooled leaguewide). `ff_component_z=-0.387`,
 `fr_component_z=-0.347` (zero FF/FR all season, shrunk hard toward a
 modest league prior rather than reading as a stark negative).
@@ -2056,18 +2056,18 @@ plausible starter-caliber season, clearly behind Watt's, consistent with
 Watt (not Heyward) being the 2024 Steelers' primary disruptor.
 
 **Minkah Fitzpatrick** — this game: 0 sacks, 7 comb tackles (season-high
-volume for this game), 0 TFL/FF. 2024 season (18 games): 0 sacks, 1 TFL, 1
+volume for this game), 0 run stuff/FF. 2024 season (18 games): 0 sacks, 1 run stuff, 1
 INT, 1 FF, 0 FR, 104 comb tackles (a safety's real workload).
 `tackle_share_z=+2.433` — by far his largest positive component, correctly
 reflecting his real defining trait (elite tackle volume) rather than being
 swamped by sack-driven weights the way a naive equal-weighting might.
-`sack_component_z=-0.704` and `tfl_component_z=-0.570` (both below the
+`sack_component_z=-0.704` and `run_stuff_component_z=-0.570` (both below the
 pooled-leaguewide mean, honestly — a free safety isn't expected to
 generate either, and pooling makes that visible rather than hidden inside
 a flattering position-only comparison). `int_component_z=+0.896`,
 `ff_component_z=+0.440`, `fr_component_z=-0.146`. Result: `idi=0.249,
 idi_z=0.386, dpvs_g=0.724` — a real, positive defensive season anchored
-almost entirely in tackle volume, exactly what the sack/TFL-heavy new
+almost entirely in tackle volume, exactly what the sack/run stuff-heavy new
 weights (0.269/0.224) would be expected to produce for a non-rushing
 defensive back, and exactly the kind of case the user's "I don't care if
 it's the Kicker" framing was arguing FOR: Fitzpatrick's score isn't
@@ -2110,7 +2110,7 @@ Rechecked directly from the rebuilt parquet, same two players/season as
 §19's own recheck, to see whether this pass moves the comparison (it
 hasn't in either of the last two rounds):
 
-| Player | idi_tackle_source | tackle_share_z | tfl_component_z | sack_component_z | int_component_z | ff_component_z | fr_component_z | idi | idi_z | dpvs_g |
+| Player | idi_tackle_source | tackle_share_z | run_stuff_component_z | sack_component_z | int_component_z | ff_component_z | fr_component_z | idi | idi_z | dpvs_g |
 |---|---|---|---|---|---|---|---|---|---|---|
 | Joe Greene | gamebooks_boxscores_gated70pct | +0.786 | +0.714 | +3.193 | -0.320 | +2.057 | +2.497 | 1.625 | **2.510** | **2.377** |
 | Jack Lambert | gamebooks_boxscores_gated70pct | +2.926 | +1.301 | +0.035 | +0.146 | -0.310 | +0.133 | 0.820 | **0.971** | **1.761** |
@@ -2201,23 +2201,23 @@ player_pass_credit = pass_weight * (share of pass_family's PASS numerator this g
 team_credit_share    = player_run_credit + player_pass_credit
 ```
 RUN numerator = tackles_combined (real per-game PFR data confirmed reliable
-**1999+ only** — verified directly: `player_defense.csv`'s tackle/PD/TFL
+**1999+ only** — verified directly: `player_defense.csv`'s tackle/PD/pfr_tfl
 columns are populated starting the 1999 season, blank before it, contrary to
 this project's earlier "2001+" shorthand). Pre-1999, RUN numerator is a
 season-level tackle-count proxy applied uniformly across a player's games
 that season — sourced from `dpvs/idi.py`'s own already-validated,
 name-resolved loaders (`load_gamebook_tackle_gated()` for 1967-1977 reused
 directly; an equivalent loader built for 1978-1998 from the same
-`pfr_pbp_defensive_stats_1978_2025.csv` this project already trusts for TFL,
+`pfr_pbp_defensive_stats_1978_2025.csv` this project already trusts for run stuff,
 mirroring `load_pbp_tfl()`'s own pattern) rather than re-deriving name
 matching from scratch. 91.7% of pre-1999 participant-games resolved a season
 tackle-count proxy.
 
 PASS numerator mix (per-game sacks/INT/FF are real PFR data for the entire
-1950+ range; TFL/PD only 1999+) — documented judgment call, exactly matching
+1950+ range; run stuff/PD only 1999+) — documented judgment call, exactly matching
 the task's specified edge/coverage split and extending it for MLB/DT:
 ```
-DE / OLB (edge) = sack + tfl + ff                    (task-specified)
+DE / OLB (edge) = sack + run_stuff + ff                    (task-specified)
 CB/FS/SS (coverage) = 0.25*tackle + 3*int + pd        (task-specified, weighted:
                                                          INT rarer/more valuable)
 MLB   = 0.25*tackle + 1*sack + 3*int                   ("reasonable mix")
@@ -2528,7 +2528,7 @@ this task and required no changes.
 
 With IDI confirmed back to its correct, position-blind state (six
 components, season-only z-scoring, the single flat `_W_BASE` from §20:
-`0.179 tackle / 0.224 tfl / 0.269 sack / 0.108 int / 0.112 ff / 0.108 fr`),
+`0.179 tackle / 0.224 run_stuff / 0.269 sack / 0.108 int / 0.112 ff / 0.108 fr`),
 the question the user actually asked is answered directly: is `dpvs_g`'s
 math defensible given Shell's real counted totals, or is there a real
 mechanical bug inflating him specifically? **Answer: no coding bug found
@@ -2543,7 +2543,7 @@ rebuild, unchanged from §20/§21's own state):
 | Component | Value |
 |---|---|
 | tackle_share_z | +1.533 |
-| tfl_component_z | -0.663 |
+| run_stuff_component_z | -0.663 |
 | sack_component_z | +0.237 |
 | int_component_z | +0.670 |
 | ff_component_z | +2.035 |
@@ -2554,7 +2554,7 @@ This is a real, honestly-computed, position-blind number — nothing here
 double-counts an event or misreads a stat. Compare it directly to Randy
 White (RDT, DAL 1978, the season's actual #1 overall): White's raw `idi`
 is **1.833** — nearly **2.5× Shell's**, driven by a near-max
-`sack_component_z=4.0` (winsorized) plus real tackle/TFL volume. **On the
+`sack_component_z=4.0` (winsorized) plus real tackle/run stuff volume. **On the
 position-blind IDI number alone, White's season is unambiguously more
 dominant than Shell's — this is exactly what should be true and IDI gets
 it right.**
@@ -2579,11 +2579,11 @@ Shell's #2 finish:
   all of them (pooled: coverage mean -0.067/std 0.344 vs pass_rusher
   +0.488/std 0.588 vs run_stopper +0.254/std 0.521). The football reason
   is structural, not a data artifact: defensive backs essentially never
-  record a sack, TFL, FF, or FR in most seasons — four of IDI's six
+  record a sack, run stuff, FF, or FR in most seasons — four of IDI's six
   components sit near a low/neutral value for the median DB — so the
   whole position group's raw `idi` values cluster tightly near a low
   floor, while front-seven groups' wider role diversity (some players
-  rack up huge sack/TFL/FF numbers, others contribute almost none) spreads
+  rack up huge sack/run stuff/FF numbers, others contribute almost none) spreads
   their `idi` values across a much wider range.
 - **A narrower comparison-population std mechanically inflates any
   same-sized gap-above-mean into a larger z-score.** Shell's `idi=0.750`
@@ -2726,7 +2726,7 @@ Full per-season top-15 tables and the summary CSV:
 Re-derived directly from the fresh rebuild (component z-scores, `idi`,
 `idi_z`, `tcs_z`, `dpvs_g`, and overall/position season rank):
 
-| Player | Season | tackle_share_z | tfl_z | sack_z | int_z | ff_z | fr_z | idi | idi_z | dpvs_g | Overall rank |
+| Player | Season | tackle_share_z | run_stuff_z | sack_z | int_z | ff_z | fr_z | idi | idi_z | dpvs_g | Overall rank |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | J.J. Watt | 2012 | +1.375 | +4.000 | +4.000 | -0.537 | +1.421 | +2.782 | 2.620 | 3.247 | 2.567 | 1/366 |
 | Aaron Donald | 2018 | +0.515 | +3.532 | +4.000 | -0.723 | +2.376 | +0.164 | 2.165 | 3.392 | 2.525 | 3/413 |
@@ -2884,7 +2884,7 @@ moves; DE/OLB/MLB/DT keep their static `position_weights.py` fractions
 unchanged, and the run tiers are untouched entirely. Before committing,
 checked why DB specifically is the right scope: a team-season's DB-group
 activity is highly game-to-game bursty (INTs are rare events) while
-front-seven pressure production (sacks/TFL/FF) is comparatively steadier
+front-seven pressure production (sacks/run stuff/FF) is comparatively steadier
 per game for a given player mix -- exactly where a fixed tier weight is
 most likely to misrepresent a specific game (a 3-INT day should read
 differently from a token-tackle day for the DB tier; a front-seven
@@ -2965,7 +2965,7 @@ task): `tcs_z=0.84`, `idi_z=1.15`, `dpvs_g=1.075`, rank **#38**. After this
 rebuild: `tcs_z=+1.235`, `idi_z=+1.154` (bit-identical to the pre-task
 baseline, as expected -- IDI wasn't touched), `dpvs_g=1.1741`, rank **#32**.
 Six IDI components also bit-identical to §22.5's own reported values
-(tackle_share_z +1.533, tfl −0.663, sack +0.237, int +0.670, ff +2.035,
+(tackle_share_z +1.533, run_stuff −0.663, sack +0.237, int +0.670, ff +2.035,
 fr +2.409, idi=0.750) -- confirms IDI is genuinely unaffected end to end.
 The rank moved modestly (#38→#32), entirely via `tcs_z` (0.84→1.235):
 the new position-weighted, multi-metric run/pass points mechanism credits
@@ -3114,7 +3114,7 @@ scope. Fixed directly (not via an agent) immediately after §22 returned:
 
 - Root cause confirmed with real data: coverage has the smallest `idi`
   standard deviation of the three position groups in **58/58 measurable
-  seasons** (structural -- DBs rarely record sack/TFL/FF/FR), so the same
+  seasons** (structural -- DBs rarely record sack/run stuff/FF/FR), so the same
   absolute gap-above-mean produced a much larger `idi_z` there than for
   run_stopper/pass_rusher.
 - Fix: `z_score_components()` in `dpvs/composite.py` now groups by
@@ -3384,6 +3384,1880 @@ left uncommitted, consistent with this whole session.
 
 ---
 
+## 25. Additive Six-Stat Formula, Fit for Real (Logistic Regression Against AP All-Pro), Replacing the Hand-Picked Version -- and a Real Data-Sourcing Bug Found Along the Way (2026-08-23)
+
+Direct follow-on to the same day's §24/DPVS_G_FORMULA_REFERENCE.md "reweighted
+test variant" work. The user's own framing of what they wanted, verbatim:
+*"I don't want it hand-picked... I want it fit properly"* -- a real
+ADDITIVE point formula, `score = w1*tackle_total + w2*sacks + w3*pfr_tfl +
+w4*ff + w5*fr + w6*int` on RAW season counts (not z-scores, not shares, no
+"weights sum to 1.0" constraint -- the user's own analogy: *"a 3-point shot
+is worth 3 points, full stop, it doesn't tax your 2-point-shot value"*),
+with the six weights derived from real data via logistic regression against
+AP All-Pro recognition, not eyeballed against three team-seasons.
+
+### 25.1 The task brief's own premise turned out to be wrong, and the brief said to check
+
+The brief that kicked off this task assumed 1999-2024 "has fully reliable,
+official PFR season totals for all six stats... so the weight-derivation
+itself isn't contaminated by older-era data-quality issues" -- but also
+explicitly said to confirm this against dpvs/idi.py's actual source rather
+than assume it. Confirmed, via a background-agent investigation into
+football_db's schema and ingestion scripts, that the assumption was **false**
+for the obvious candidate source: dpvs/idi.py's own live Postgres path
+(`load_gold_stats_from_db()`, reading `gold.player_game_stats` /
+`silver.player_game_stats_pfr`) is, for the ENTIRE 1978-2025 range including
+1999-2024, sourced from `gamebooks_boxscores/parse_pfr_pbp.py` parsing PFR's
+`pbp.csv` PLAY-BY-PLAY TEXT -- not PFR's official box-score columns. The
+`data_tier` tag distinguishing `pfr_pbp_undercount_1978_1998` from
+`pfr_pbp_derived_1999_2025` (added in the 2026-08-21 migration) reflects only
+that officiating/scorekeeping got more consistent after 1999, not a switch to
+an officially-sourced pathway -- both tiers run through the identical
+text-parsing code. This matters well beyond this one task: the 2026-08-20
+experiment (`gamebooks_boxscores/docs/experiments/
+2026-08-20_pfr_pbp_vs_gamebook_completeness/README.md`) already found this
+same pbp.csv-text mechanism missing real, confirmed sacks for J.J. Watt 2012
+(-4.0), Aaron Donald 2018 (-2.0), DeMarcus Ware 2008 (-3.0), and Von Miller
+2012 (-1.0) -- all squarely inside the "1999-2024, should be reliable" window.
+**This means dpvs/idi.py's LIVE production sack/run_stuff/ff/fr numbers for
+1999-2024 -- not just the explicitly-flagged 1978-1998 window -- likely carry
+the same kind of undercount**, previously undocumented as a live-system risk
+(flagged in Open Questions below; out of scope to fix in this task).
+
+The right source turned out to exist on disk, unused by anything in this
+project until now: `~/data/pfref/raw/season/player/defense/defense_{year}.csv`,
+scraped directly from PFR's own official season-defense stat PAGE (not
+play-by-play text), one row per player-season, tackles_solo/tackles_assists
+populated from 1994 and tackles_loss (pfr_tfl) from 1999 -- which is exactly why
+1999 is the right fit-window start: it's the first season all six stats are
+simultaneously available from an official (non-text-parsed) PFR source. This
+is a genuinely different, more reliable pathway than anything dpvs/idi.py's
+production code currently reads for the modern era.
+
+### 25.2 Fitting dataset and fit
+
+`scripts/fit_idi_additive_weights.py` (new). Built from `defense_{year}.csv`
+for 1999-2024 (26 seasons; two column-naming eras on disk -- 1999-2005 use an
+older, shorter header, normalized in code), multi-team players deduplicated to
+their PFR-provided season-aggregate row (2TM/3TM), filtered to defensive
+positions via `dpvs/positions.py`'s existing `map_position()` (the same
+mapper this project already uses everywhere else -- data-cleaning filter
+only, the fit itself has no position terms). One real bug hit and fixed along
+the way: the 1999-2005 CSVs' numeric columns read back as pandas `object`
+dtype (some non-numeric artifact elsewhere in the raw file forces the whole
+column to object), which silently turned `solo_tackles + ast_tackles` into
+STRING concatenation ("65"+"14" -> "6514") instead of addition -- caught by
+an assertion failure downstream, fixed by forcing `pd.to_numeric(...,
+errors="coerce")` on every stat column before any arithmetic.
+
+**Dataset: 23,339 defensive player-seasons, 644 labeled AP 1st/2nd-Team
+All-Pro (2.76%)** -- label from `gold.player_awards` (org='AP', designation
+IN ('1st Tm','2nd Tm')) joined through `internal.player_xref` to the same
+bare PFR ids the season-defense CSVs already use natively (no name-matching
+needed), restricted to defensive positions on the award side too as a
+belt-and-suspenders check.
+
+Fit: `sklearn.linear_model.LogisticRegression`, target = the binary All-Pro
+label, features = the six raw stat counts, standardized only for solver
+stability and unscaled back to real per-raw-unit coefficients before
+reporting (`coef_raw = coef_scaled / std`, intercept adjusted to match) --
+exactly the requirement the task brief called out (report real per-unit
+points, not scaled/abstract coefficients).
+
+**Fitted weights (points per raw season-count unit):**
+
+| Stat | Weight |
+|---|---|
+| tackle_total | +0.0225 |
+| sacks | +0.2358 |
+| pfr_tfl | +0.1338 |
+| ff | +0.1671 |
+| fr | +0.1227 |
+| int | **+0.6808** |
+| intercept | -7.4315 |
+
+**`score = 0.0225*tackle_total + 0.2358*sacks + 0.1338*pfr_tfl + 0.1671*ff +
+0.1227*fr + 0.6808*int`** (intercept only used for the logistic
+probability, not the ranking score itself, matching the task's own formula
+spec). This is on whatever scale the data actually produced -- a leader-level
+season (18 sacks, 10 pfr_tfl, 100 tackles) lands around 6-9 points, not the
+hand-picked version's ~0-60 scale; not rescaled to hit a round number, per
+the task brief's explicit instruction not to.
+
+The single most striking real result: **INT's weight (0.68) is roughly 3x
+any other stat's**, and by a wide margin the single strongest predictor of
+AP All-Pro selection in the real 1999-2024 data. This is a real, data-driven
+finding, not an artifact -- interceptions are rare, highly visible,
+game-swinging, and (unlike run-support tackles) essentially never inflated by
+garbage-time volume the way raw tackle counts can be. It also means this
+formula, precisely because it's honestly fit rather than hand-tuned,
+structurally rewards DBs/coverage players who can generate INTs over pure
+run-stoppers/pass-rushers who structurally cannot -- see §25.4 below for a
+real case (Alan Page, 1971) where this produces a result that plainly
+contradicts historical recognition. Flagged here, not smoothed over.
+
+### 25.3 Validation: top-30 vs. real AP All-Pro, and model #1 vs. real DPOY
+
+Per season 1999-2024: rank ALL defensive player-seasons that year by `score`,
+take the model's own top-30, check what fraction of that season's REAL AP
+1st/2nd-Team defenders land inside it (real per-season AP defensive count
+confirmed directly from the data, not assumed -- ranges 19-35 across the 26
+seasons, not a fixed 22).
+
+**Aggregate: 325 of 644 real AP All-Pro defensive player-seasons (50.5%)
+land in the model's own top-30 that season.** Mean per-season hit rate
+50.9%, ranging from 40.0% (2003, 2024) to 71.4% (2021) -- full 26-season
+table in `data_output/idi_additive_top30_validation.csv`. This is a real,
+moderate, honestly-mediocre result -- roughly half of real All-Pro-level
+defensive seasons are NOT among the top 30 by this six-stat additive score
+in a given year, most likely reflecting exactly the position-coverage gap
+noted in §25.2 (players whose real defensive value doesn't route through
+tackles/sacks/pfr_tfl/FF/FR/INT at all, e.g. run-support DBs who rarely
+intercept, or coverage linebackers). Not forced to look better than it is,
+per the task brief's explicit instruction.
+
+**Model's own #1-ranked defender per season vs. the real AP DPOY winner
+(`gold.player_awards`, designation='DPOY' -- confirmed complete, 26/26
+seasons, all defensive, all resolved to a PFR id) agree in 8 of 26 seasons
+(30.8%)** -- full table in `data_output/idi_additive_dpoy_check.csv`.
+Agreements: Strahan 2001, Reed 2004, Woodson 2009, Watt 2012/2014/2015,
+Watt(T.J.) 2021, Donald 2018. Notable misses: Sapp 1999 (model's #1,
+Armstead, ranked the real winner 31st), Sanders 2007 (model ranked the real
+winner 64th -- Sanders' famously injury-limited, tackle-light, INT-light
+season), Surtain 2024 (model ranked the winner 114th -- a shutdown corner
+whose whole value is passes NOT thrown his way, which a raw-count formula
+structurally cannot see). This is the honest number, not adjusted to
+flatter the formula -- consistent with this project's standing principle
+that disagreeing with award voting is sometimes the correct, informative
+result, not a bug to chase.
+
+### 25.4 Out-of-sample application to 1971 MIN / 1972 PIT / 1974 PIT -- genuine agreement AND genuine complication
+
+`scripts/apply_idi_additive_weights_gamebook_era.py` (new). These three
+team-seasons were never part of the 1999-2024 fitting pool -- a real
+out-of-sample test, not something tuned to reproduce any particular
+ordering. Six stats sourced two ways per the task brief: sacks/int/fr
+straight from PFR's official `defense_{season}.csv` for the target team (no
+proration -- same reasoning as §25.1, these are simple official box-score
+counts even in this era); run_stuff/ff/tackle_total PRORATED from
+`silver.player_game_stats_gamebook`'s `completeness_qualified=true` rows
+(the exact source dpvs/idi.py's own "Layer 0" already uses for this era) --
+for each player, sum the stat across the team-side's qualifying games,
+divide by the TEAM's summed opponent-opportunities (opponent rush attempts +
+completions + times sacked, `gold.team_game_stats`) across those SAME
+qualifying games to get a rate, multiply by the team's full-season
+opponent-opportunities. This is the identical "rate x opportunities" idea
+behind idi.py's own tackle_opportunity_ratio mechanism (Layer 2b), applied
+directly to the real per-player qualified-game data rather than that
+layer's own lookup table (which is calibrated for a different, media-guide
+fallback pathway not needed here -- all three team-seasons have real
+gamebook coverage). Qualified-game coverage varies by team-season and
+should be read as a confidence signal: 1971 MIN 6/14 games (43%, thinnest),
+1972 PIT 9/14 (64%), 1974 PIT 13/14 (93%, most reliable).
+
+**1972 PIT -- Ham vs. White, CONFIRMS the hand-picked version's direction.**
+Jack Ham ranks #1 (score 8.800), Dwight White #4 (score 5.767) -- Ham clearly
+above White, same direction the hand-picked version found (53.51 vs 40.42
+there), and by a slightly WIDER ratio under the real fitted weights (1.53x
+vs. the hand-picked version's 1.32x). Full team table has Joe Greene #2
+(7.057) and Mike Wagner (FS, 3 INT) #3 (5.858) ahead of White.
+
+**1974 PIT -- Greene vs. Holmes, COMPLICATES the hand-picked version's
+finding; does not confirm it.** Under the real fitted weights, **Ernie
+Holmes ranks #2 (score 6.212), ABOVE Joe Greene at #5 (score 5.568)** --
+the opposite of the hand-picked version (Greene 60.21 vs. Holmes 43.51).
+Traceable directly to the real numbers: Holmes' prorated season line (11.5
+sacks, 6.5 run stuff, 2.17 FF, ~101 tackles) exceeds Greene's (9.0 sacks, 3.25
+run stuff, 1.08 FF, ~74 tackles) on every one of the four highest-weighted
+stats except FR (Greene 4, Holmes 0) and INT (Greene 1, Holmes 0) -- and
+those two are the formula's lowest- and highest-weighted stats
+respectively, so Greene's FR edge (4 * 0.1227 = 0.49) can't offset Holmes'
+combined sack/run stuff/FF/tackle edge (~1.8 points) even after Greene's INT edge
+(1 * 0.6808 = 0.68) is netted in. This is a genuine, unforced disagreement
+with real historical recognition (Greene: multiple-time First-Team All-Pro,
+real MVP support in both 1972 and 1974, Hall of Fame; Holmes: never
+All-Pro or Pro Bowl in his career) -- reported plainly per the task brief's
+explicit instruction, not smoothed into agreement. It's also the same
+direction DPVS_G_FORMULA_REFERENCE.md's own hand-picked "reweighted test
+variant" (FF/INT bumped up from the original hand-picked weights) had
+already started to move in ("helps Holmes over Greene slightly") -- so this
+isn't a one-off artifact of the real fit, it's a real, structural
+consequence of weighting FF/sack/run stuff more heavily relative to FR/tackle,
+which the honest fit does more aggressively than either hand-picked
+version did.
+
+**1971 MIN -- a third data point, and a clean illustration of §25.2's INT-
+weight caveat.** The model's #1 defender is Charlie West (CB, score 6.113),
+NOT Alan Page (RDT, score 5.654, #2) -- driven almost entirely by West's 7
+interceptions against the formula's 0.68 INT weight (4.77 of his 6.11
+points), versus Page's zero interceptions that season. This is a plain,
+reportable disagreement with real history: **Page won the 1971 NFL Most
+Valuable Player award, the first defensive player ever to win it** -- about
+as strong a real-world signal as exists that a single-season formula
+ranking a corner above him got the wrong answer here, precisely because
+Page's individual dominance (100 prorated tackles, 9 sacks, 6.8 run stuff) doesn't
+route through the one stat this fit weighted most heavily. Reported
+honestly, not adjusted -- exactly the outcome the task brief warned might
+happen and asked to be stated plainly rather than forced.
+
+Full per-player tables: `data_output/additive_score_1971_min.csv`,
+`data_output/additive_score_1972_pit.csv`, `data_output/
+additive_score_1974_pit.csv`.
+
+### 25.5 Where this leaves the two formula versions
+
+This fitted version is NOT wired into `dpvs/idi.py`'s live `_W_BASE` --
+same status as DPVS_G_FORMULA_REFERENCE.md's hand-picked "reweighted test
+variant" it's meant to replace: a validated alternative under review, not
+yet adopted into production. It supersedes the hand-picked version as the
+answer to "what should the six weights be" (real data, not eyeballed), but
+the two don't fully agree (§25.4's Holmes/Greene reversal) and the top-30/
+DPOY validation (§25.3) shows real, honestly-reported limitations rather
+than a clean win. Whether/how to adopt this into `_W_BASE` -- and whether it
+should REPLACE the existing rate+shrinkage+volume IDI mechanism entirely or
+sit alongside it as a second, simpler model -- is an open decision, not
+made in this task. DPVS_G_FORMULA_REFERENCE.md's "reweighted test variant"
+section has been updated to point here rather than describe the hand-picked
+numbers as the current best answer.
+
+### 25.6 Files touched this section
+
+New: `scripts/fit_idi_additive_weights.py`, `scripts/
+apply_idi_additive_weights_gamebook_era.py`, `data_output/
+idi_additive_fit_dataset_1999_2024.csv`, `data_output/
+idi_additive_fit_weights.json`, `data_output/idi_additive_top30_validation.csv`,
+`data_output/idi_additive_dpoy_check.csv`, `data_output/
+additive_score_{1971_min,1972_pit,1974_pit}.csv`. `docs/
+DPVS_G_FORMULA_REFERENCE.md` updated (§25.5). No changes to `dpvs/idi.py`,
+`dpvs/composite.py`, or any live-formula code -- this task was the
+weight-derivation and its validation, not an adoption decision. Left fully
+uncommitted, per this task's own instruction.
+
+---
+
+## 26. TCS Redesign -- Fixed Group Points, No Individual-Stat Double-Counting (2026-08-24)
+
+Two independent pieces of work this session (Part A here, Part B in §27) --
+documented as separate sections per the task's own instruction not to tangle
+them, though both end with a rebuild+validation pass.
+
+### 26.1 The core change
+
+Direct from the user, verbatim: *"Now given they are already getting IDI
+stats for this game, it's more about how to give the group those points...
+I know we discussed trying to attribute these with counting stats too, but
+that's double counting. I think we need to probably just stick with the
+group stuff."* §21-§23's TCS mechanism (`run_share`/`pass_share`, splitting
+a fixed group weight among a family's participants by their OWN production
+that game -- sacks/tackles/run stuff/etc.) is REMOVED entirely. A player's own
+production is already rewarded by IDI (Layer 2) -- weighting TCS credit by
+that same production a second time double-counted it across two layers.
+`dpvs/position_credit.py` was rewritten from scratch; `run_share`,
+`pass_share`, `_pass_numerator`, and the whole family-numerator-sum
+machinery no longer exist anywhere in the module.
+
+### 26.2 The new mechanism
+
+```
+player_run_credit  = run_tier_points(role)  * run_points_earned  * run_role_share
+player_pass_credit = pass_tier_points(role) * pass_points_earned * pass_role_share
+team_credit_share    = player_run_credit + player_pass_credit
+```
+
+`run_points_earned`/`pass_points_earned` are §23/§24's already-built,
+untouched z-scored gap-vs-opponent-expected metrics (`dpvs/
+run_pass_points.py`) -- reused directly, not rebuilt, per the task's
+instruction. `run_tier_points`/`pass_tier_points` are NEW fixed point
+values per (scheme, phase, role) -- `dpvs/position_weights.py`'s
+`ROLE_TABLES` (below), replacing the old proportional
+`PRODUCTION_TABLES` (kept in the file, unused, as historical reference).
+
+**`role_share` -- the proration question, resolved against what data
+actually exists.** The task asked to check what per-game granularity is
+actually available before choosing a proxy. Checked directly: this project
+has NO real per-game snap counts anywhere, for any era -- neither
+`gold.player_game_stats`/`silver.player_game_stats_pfr` nor the gamebook-
+era corpus carry a snap-count column. The finest granularity that DOES
+exist is binary: whether a player has a participant row in a given game at
+all (a stat line or a named-starter credit). Given that, `role_share` is a
+**capacity-based** proration, not a snaps-based one:
+
+```
+role_share = min(1.0, role_capacity / n_players_sharing_this_exact_role_this_game)
+```
+
+`role_capacity` = how many players normally carry that EXACT resolved role
+label for one team in one game (1 for a side-specific slot like LDE, 2 for
+a side-pooled slot like a 3-4's undifferentiated "DE" label or a 4-3's
+two-corner "CB" label -- see `position_weights.py`'s `ROLE_TABLES`
+docstring for the full table). Normal case (role fully staffed, e.g. both
+CBs recorded a stat line that game): each gets `min(1, capacity/capacity) =
+1.0`, i.e. the FULL fixed value, un-prorated. Genuine injury-substitution
+case (2 different players both carry a single-capacity role, e.g. one NT
+gets hurt mid-game and a backup NT finishes it): each gets `min(1, 1/2) =
+0.5`, splitting the role's point value evenly -- the exact "split
+proportionally if multiple" the task asked for, using the finest proxy this
+project's real data supports (equal split by headcount, not a snap-weighted
+split, since no snap data exists to weight by).
+
+### 26.3 New tier tables
+
+3-4 RUN and 3-4 PASS are VERBATIM from the user, this session:
+
+| 3-4 RUN | pts | cap | | 3-4 PASS | pts | cap |
+|---|---|---|---|---|---|---|
+| NT | 4.00 | 1 | | OLB (each) | 3.00 | 2 |
+| MLB (each) | 2.00 | 2 | | DE (each; pools 2xDE+1xNT*) | 3.00 | 3 |
+| DE (each) | 1.50 | 2 | | CB/FS (pooled "DB"*) | 2.00 | 3 |
+| SS, OLB (each) | 0.75 | 1/2 | | SS | 1.00 | 1 |
+| FS, CB (each) | 0.25 | 3 (pooled) | | MLB (each) | 0.25 | 2 |
+
+\* 3-4 NT has no dedicated PASS row in the table the user gave (OLB/DB/DE/
+MLB only) -- pooled under "DE" as the closest interior-lineman analog, a
+PRE-EXISTING judgment call from §21's `build_fine_position_map.py` (not
+new this task), just now carrying a higher point value (3.0 vs the old
+0.2 proportional weight). 3-4 also pools CB+FS into one "DB" pass label
+(pre-existing, since the raw position data can't always tell CB from FS in
+a 3-4 secondary) -- both get the SAME 2.0 value regardless, so the pooling
+doesn't lose any real distinction here, unlike the fix needed below.
+
+**4-3 RUN and 4-3 PASS were NOT given as explicitly -- derived, and every
+value below is flagged as such, not silently guessed.** Method: the SAME
+r=0.65 geometric tier-decay already established in this codebase
+(`TIER_STRUCTURE`/`build_weight_table()`), anchored to a POINT-UNIT total
+instead of a 1.0-proportion total (RUN total=14.0, PASS total=19.5 -- each
+matching the corresponding 3-4 table's own value×capacity sum, so both
+schemes land on a comparable scale). The alternative the task offered --
+"a direct point analog of the 3-4 pattern" -- was rejected because the 3-4
+tables themselves are NOT a clean decay (RUN ratios 0.5/0.75/0.5/0.33,
+PASS ratios 0.667/0.5/0.25) -- there is no single pattern to analogize
+from directly, whereas the r=0.65 tier-decay is a real, reproducible,
+already-established mechanism in this codebase (`position_weights.py`).
+
+| 4-3 RUN (derived, r=0.65, total=14.0) | pts | cap |
+|---|---|---|
+| 1-technique DT/NT | 4.036 | 1 |
+| (other) DT | 2.623 | 2† |
+| DE (each) | 1.705 | 1 (2 if side unknown) |
+| MLB | 1.108 | 1 |
+| OLB (each) | 0.720 | 1 (2 if side unknown) |
+| SS | 0.468 | 1 |
+| FS, CB (each) | 0.304 | 3 (pooled) |
+
+| 4-3 PASS (derived, r=0.65, total=19.5) | pts | cap |
+|---|---|---|
+| DE (each), 3-technique DT | 2.946 | 2 / 1 |
+| CB, FS (each) | 1.915 | 2 / 1 |
+| SS, ROLB | 1.245 | 1 / 1 |
+| LOLB, 1-technique DT/NT, MLB, (other) DT† | 0.809 | 1 / 1 / 1 / 2† |
+
+† see 26.4 below.
+
+**Two real judgment calls made resolving gaps in the given 4-3 spec, both
+flagged plainly per the task's explicit instruction:**
+
+1. **The user's given 4-3 RUN tier list omits DE entirely** (#1 1-tech DT
+   | #2 other DT | #3 MLB | #4 OLB | #5 SS | #6 FS,CB). A 4-3 DE is
+   plainly a real, necessary run-defense role (edge-setting, contain) --
+   treated as a spec gap, not an intentional zero-credit omission. DE was
+   inserted as its own tier between "(other) DT" and "MLB," preserving the
+   OLD proportional table's own relative ordering (where DE ranked below
+   DT/MLB but above OLB: old table had DT/MLB tied at 0.246, DE at
+   0.160/0.104, OLB at 0.104/0.068).
+2. **The given 4-3 PASS tiers have no explicit "(other) DT" bucket the way
+   RUN does** -- PASS only names "3-technique DT" (tier 1, elevated) and
+   "1-technique DT/NT" (tier 4, low). Resolution: an uncited/default DT
+   (§26.4) gets the LOWER of the two PASS DT values for pass credit, never
+   the elevated pass-rush tier -- this project never assumes pass-rush-
+   specialist credit for a player without a citation, the same "don't
+   guess" posture the override table itself enforces.
+
+### 26.4 1-technique / 3-technique DT override
+
+Scoped exactly per the task: applies ONLY to a player individually,
+explicitly confirmed by name in `docs/deferred/
+09_dl_technique_research_pilot_20260823.md`. Every other 4-3 DT defaults to
+the "(other) DT" bucket -- RUN tier-2 value (2.623), PASS tier-4/low value
+(0.809) -- never a stats-based guess (a tackle-volume heuristic already
+failed once this session's prior work: Ernie Holmes out-tackled the
+confirmed-1-tech Joe Greene in 1974). Implemented as `dpvs/
+dt_technique_overrides.json` (evidence-cited entries, same pattern as
+`gamebooks_boxscores/roster_name_overrides.json`) + `dpvs/dt_technique.py`
+(resolver, keyed on `(pfr_player_id, team)`).
+
+**16 players confirmed and included** (beyond Joe Greene, the doc names
+several more with real, individual sourcing -- not just Greene as the
+task brief implied might be the only one): 1-technique -- Joe Greene
+(PIT), Henry Thomas (MIN); 3-technique -- Alan Page (MIN), Keith Millard
+(MIN), John Randle (MIN), Warren Sapp (TAM), Aaron Donald (RAM), Cortez
+Kennedy (SEA), Kevin Williams (MIN), La'Roi Glover (DAL seasons only, per
+the doc's own ambiguous multi-team citation), Dennis Byrd (NYJ), Geno
+Atkins (CIN), Fletcher Cox (PHI), Gerald McCoy (TAM only, per the doc's
+own "mostly" caveat), Tommie Harris (CHI only, per the doc's own "under
+Lovie Smith" scoping), Darnell Dockett (CRD). Each entry's `team` scope in
+the JSON is deliberately narrower than the player's full career wherever
+the source doc names one specific team/era (e.g. Henry Thomas is Vikings-
+only, though he also played for Detroit/New England later, not discussed
+in the doc at that position).
+
+**Two names explicitly excluded, per the doc's own findings:** Merlin
+Olsen (doc: "do not encode either with high confidence -- genuinely
+unresolved between 1-tech and 3-tech") and Randy White (doc: the Cowboys'
+Flex defense doesn't map onto standard technique numbering at all --
+forcing a number here would misrepresent a real scheme mismatch, not fill
+an information gap). D'Marco Farr (doc: Medium confidence, 3-technique,
+Rams) has NO resolvable PFR id anywhere in `football_db`'s
+`internal.player_xref` (checked directly) -- excluded for lack of an
+identity to key on, not a confidence judgment; flagged in the JSON's own
+`_readme` in case a future roster-reload resolves him.
+
+**A real data-plumbing gap found and fixed while wiring this up**: the
+existing `pass_pos_label` resolution (`build_fine_position_map.py`) did
+NOT side-split a 4-3's two OLBs (always flat "OLB," no LOLB/ROLB
+distinction) even though `run_pos_label` already did -- but the new 4-3
+PASS tier table needs ROLB (1.245) and LOLB (0.809) to carry different
+credit, the same real distinction the RUN table already encodes. Fixed by
+adding `resolve_pass_pos()` (mirrors `resolve_run_pos()`'s existing side
+logic, same underlying `raw_position` field, so no new data source was
+needed). Second, smaller gap: `resolve_secondary()` collapsed a 3-4's
+strong safety into the pooled "DB" pass label (same as CB/FS) -- but the
+new 3-4 PASS table gives SS its own value (1.0, distinct from CB/FS's
+2.0). Fixed by making SS's pass label unconditional ("SS" in both
+schemes, not just 4-3). Both fixes rerun through
+`scripts/build_fine_position_map.py`; corpus-wide resolution rate
+unchanged (95.9%, 304,388/317,299) -- confirms these were real label-
+granularity fixes, not something that broke existing resolution.
+
+**A capacity asymmetry deliberately built into the "(other) DT" bucket**:
+capacity 2, not 1, for both RUN and PASS. Reasoning: two DIFFERENT
+uncited DTs on the same team in the same game (the common case -- most
+DT pairs have no citation at all) are two independently-real players each
+occupying their OWN slot, not two players sharing one slot -- capacity 1
+would have HALVED both of their credit relative to a team with one
+confirmed player, purely because of citation availability, not real
+football role. Confirmed players (1-technique/3-technique) keep capacity
+1, since a genuine same-game substitution behind a NAMED, confirmed player
+is exactly the injury-sub case role_share is meant to catch.
+
+### 26.5 Rebuild
+
+`scripts/build_fine_position_map.py` (label fixes above) ->
+`scripts/build_tcs_ingredients.py --seasons 1967-2024` (rerun to pick up
+the corrected labels; resolution rate unchanged, 304,388/317,299 = 95.9%,
+confirming the redesign didn't touch position-resolution logic, only
+credit computation) -> `scripts/apply_tcs_position_credit.py` (now calls
+the rewritten `compute_credit()`; `credit_method` breakdown identical to
+every prior session: 304,388 weighted / 12,889 flat_unresolved_pos / 22
+flat_no_scheme) -> `scripts/build_dpvs_g.py --seasons 1967-2024 --export`
+-> `scripts/load_dpvs_g_to_db.py`. **Final player-seasons: 20,534,
+identical to every session back to §18** (participation logic untouched;
+only credit values changed) -- reloaded: 20,534/20,243 resolved
+`player_id`, also identical to every prior session.
+
+### 26.6 Spot checks -- real results, reported honestly, not tuned
+
+| Team-season | Player | Old (§23) rank | New (§26) rank | dpvs_g |
+|---|---|---|---|---|
+| 1971 MIN | Alan Page | (not top of team in §21-23 tables) | **1 overall** | 3.1691 |
+| 1971 MIN | Charlie West | -- | 160 overall | -0.2187 |
+| 1972 PIT | Joe Greene | 1 | **1 overall** | 3.3150 |
+| 1972 PIT | Dwight White | 4 | **2 overall** | 2.8836 |
+| 1972 PIT | Jack Ham | **1 (every prior session)** | **21 overall** | 1.5223 |
+| 1974 PIT | Joe Greene | 2 | **1 overall** | 2.5279 |
+| 1974 PIT | L.C. Greenwood | -- | 2 overall | 2.4648 |
+| 1974 PIT | Ernie Holmes | 3 | 3 overall | 2.3924 |
+| 1976 PIT | Jack Lambert | 1 (team AND league) | 1 on team, **3 league-wide** | 2.7456 |
+| 1978 PIT | Donnie Shell | 32 (§23) | 39 | 1.1038 |
+
+**Greene vs. Holmes, 1974 -- the flagship "don't force it" check**: Greene
+stays clearly above Holmes (2.5279 vs 2.3924, rank 1 vs 3) under the new
+mechanism. Reported plainly either way per the task's instruction; this is
+the honest result, not a tuned one -- the DT technique override (Greene =
+confirmed 1-technique -> RUN 4.036 tier; Holmes = uncited default -> RUN
+2.623 tier) is doing real, structural work here, independent of either
+player's own game production (which is exactly the point of the
+redesign).
+
+**Jack Ham 1972 -- the real surprise, reported honestly, not smoothed
+over.** Every prior session this whole summer (§21-24) found Ham clearly
+#1 on the 1972 Steelers under every TCS mechanism tried. Under this
+redesign he drops to rank 21 overall, BEHIND Dwight White (rank 2).
+Diagnosed directly, not just noted: `gold.team_scheme_coach_season` has
+tagged the Steelers' ENTIRE 1969-1981 span (confirmed by direct query,
+every one of those 13 seasons) as scheme `'4-3'`, never `'3-4'` -- a
+pre-existing DB fact, not something this task introduced or could fix
+in scope. Under the 4-3 tables, an off-ball linebacker's tier value (RUN
+0.720, PASS 1.027 for the side-unknown case Ham/Andy Russell both hit) is
+structurally far below a defensive end's (RUN 1.705, PASS 2.946) --
+roughly 2.4x/2.9x lower -- REGARDLESS of how much individual production
+that linebacker generates. Under the OLD (§21-23) production-weighted
+mechanism, Ham's real elite sack/run stuff/tackle production let him win a
+bigger share of his pooled LB family's credit and close that gap; under
+the NEW fixed-role mechanism, there is no production-based lever left to
+pull -- exactly the double-counting removal the task asked for, working
+precisely as designed, just landing on a case where it collides with a
+scheme-classification call this project has not independently verified
+for the "Steel Curtain" years specifically (a defense some football
+histories describe as increasingly hybrid/3-4-influenced under DC Bud
+Carson from 1974 on, though PFR/this DB's own coach-season table calls it
+4-3 throughout). **This is flagged as a real, structural, out-of-scope
+limitation for a future session to check the scheme-classification data
+itself** -- not something this task tuned around, since doing so would
+reintroduce exactly the kind of ad hoc, don't-trust-the-mechanism patching
+the redesign was meant to remove. (1976 PIT's Jack Lambert case, by
+contrast, held up fine -- still the team's own top player, just edged to
+league-wide rank 3 by other players elsewhere that season, a much less
+structurally-loaded shift.)
+
+### 26.7 Validation
+
+**Top-15-vs-AP-All-Pro/DPOY-board overlap** (`scripts/
+build_top15_award_overlap.py`, full 1970-2024, 55 seasons, same method as
+§22.4/§23.5):
+
+| | §23.5 baseline (full 55 seasons) | §26, this rebuild (full 55 seasons) |
+|---|---|---|
+| Mean AP 1st/2nd overlap | 6.69/15 (44.6%) | 6.60/15 (**44.0%**) |
+| Mean DPOY-board overlap | 3.60/15 (24.0%) | 3.56/15 (**23.8%**) |
+| Real DPOY winner in top-15 | 70.9% (39/55) | **65.5% (36/55)** |
+
+Directionally flat to slightly down across all three metrics -- a real,
+modest regression on the DPOY-winner-in-top-15 rate (-5.4pp), essentially
+flat on the other two. Not a clean win, reported honestly rather than
+framed as an improvement; plausibly connected to the same scheme-tagging
+issue in §26.6 above (an elite off-ball defender misclassified into a
+4-3's lower LB tier would systematically under-rank in exactly the way
+that could cost a few DPOY-winner matches), though this wasn't
+individually traced further this pass.
+
+**YoY stability** (`scripts/yoy_stability_check.py`, pooled Pearson r,
+same methodology as every prior section):
+
+| | IDI_z | TCS_z | Fixed 0.60/0.40 reference (cross-session comparability) | LIVE 0.25/0.75 composite |
+|---|---|---|---|---|
+| §23.6 (prior mechanism) | 0.645 | 0.319 | 0.417 | (not separately reported) |
+| §26, this rebuild | 0.645 | **0.316** | **0.443** | **0.616** |
+
+`IDI_z` bit-identical (untouched by this task, as expected). `tcs_z` alone
+essentially unchanged (0.319 -> 0.316, noise-level). The fixed-reference
+composite improved slightly (0.417 -> 0.443); the LIVE 0.25/0.75 composite
+(not printed by the fixed-reference script, computed directly for this
+report) comes in at 0.616 -- a real, meaningfully higher pooled YoY
+stability than any prior session's TCS mechanism reported for the live
+formula. Consistent with removing a noisy, game-to-game-volatile
+production-share term from TCS's own credit computation (a player's raw
+production naturally swings more game to game than a fixed role
+occupancy does).
+
+### 26.8 Honest summary
+
+The redesign does what it was asked to do -- TCS credit no longer moves
+with a player's own game stats at all, only with team performance and
+role occupancy, closing the double-counting the user identified. Real,
+reported consequences: (1) YoY stability improved meaningfully; (2) the
+Greene/Holmes 1974 check still holds in Greene's favor, unforced; (3) the
+Jack Ham 1972 case reversed, traced to a real, pre-existing, out-of-scope
+scheme-classification limitation this redesign has no self-correcting
+mechanism against (unlike the old production-weighted version, which
+could partly paper over a bad scheme label with real production); (4)
+award-overlap validation is roughly flat, with a real small dip on
+DPOY-winner-in-top-15. None of this was tuned to force a particular
+outcome -- reported as found.
+
+### 26.9 Files
+
+`dpvs/position_credit.py` (full rewrite), `dpvs/position_weights.py`
+(`ROLE_TABLES`/`get_role_table()` added; old `PRODUCTION_TABLES`/
+`build_weight_table()`/`get_weights()` retained, unused, as historical
+reference), `dpvs/dt_technique.py` (new), `dpvs/dt_technique_overrides.json`
+(new), `scripts/build_fine_position_map.py` (`resolve_pass_pos()` added,
+`resolve_secondary()`'s SS handling fixed), `data_output/
+fine_position_map.parquet` / `tcs_ingredients.parquet` (rebuilt),
+`~/data/silver/player_game_defense.parquet` (`team_credit_share`
+overwritten again; `team_credit_share_flat` still the original §21
+baseline, untouched), `~/data/silver/dpvs_g_player_season.parquet` /
+`dpvs_g_career.parquet` (rebuilt), `gold.dpvs_g_player_season` (reloaded),
+`data_output/top15_vs_award_overlap_tcs_fixedrole_20260824.csv` (new).
+Left fully uncommitted, per this task's own instruction.
+
+---
+
+## 27. INT Trailing-Window Career-Average Smoothing (2026-08-24)
+
+Independent from §26 (Part B of this session's task), scoped to INT ONLY
+per the task -- not applied to sacks/pfr_tfl/FF/FR.
+
+### 27.1 Problem and why IDI's existing shrinkage isn't enough
+
+User, verbatim: a rare, one-off big INT season (Charlie West's 1971, 7 INT
+with no sustained track record) shouldn't get full credit the way a player
+with a genuinely stable multi-year INT rate does. IDI's existing
+empirical-Bayes shrinkage (`dpvs/idi.py`, untouched by this task) already
+pulls a season's rate toward a career/population prior, but with one FIXED
+population-wide `k` per stat (`k=14.04` for INT) -- it can't distinguish a
+player with 7 years of real 5+ INT/season history from a one-year outlier
+with none before or after; both get the same shrinkage strength.
+
+### 27.2 Build
+
+**Not wired into `dpvs/idi.py`'s live `_W_BASE` or z-score mechanism** --
+same standing as §25's additive formula: a standalone, tested alternative,
+not an adoption. Tested by substituting a smoothed INT count into §25's
+already-fitted additive formula (`score = 0.0225*tackle + 0.2358*sacks +
+0.1338*pfr_tfl + 0.1671*ff + 0.1227*fr + 0.6808*int`) in place of the raw
+single-season `int`, holding every other stat and every weight (including
+INT's own 0.6808 coefficient) fixed -- isolates the smoothing's own effect
+rather than confounding it with a full refit. `dpvs/int_smoothing.py`
+(new): trailing average over `[season-(N-1), season]`, STRICTLY trailing
+(no future seasons, safe for season-by-season historical ranking), using
+whatever's actually available for players with fewer than N career
+seasons (never requires a full N-season window to exist). Source: PFR's
+own official season-defense tables (`~/data/pfref/raw/season/player/
+defense/defense_{year}.csv`), confirmed populated for INT specifically
+back to **1950** (unlike tackle/pfr_tfl, which only start 1994/1999) -- so a
+real trailing window, not a proxy, is computable for any player-season in
+this project's full range, including the three gamebook-era spot checks.
+
+### 27.3 Validation: N=5 vs N=7, top-30-vs-AP-All-Pro and #1-vs-DPOY (1999-2024, same method as §25.3)
+
+`scripts/build_int_smoothing_validation.py` (new):
+
+| Variant | Top-30 hit rate (real AP landing in model top-30) | Model #1 == real DPOY |
+|---|---|---|
+| Baseline (raw int, §25.3) | 325/644 = **50.5%** | 8/26 = **30.8%** |
+| Trailing N=5 | 307/644 = 47.7% | 9/26 = **34.6%** |
+| Trailing N=7 | 300/644 = 46.6% | 9/26 = **34.6%** |
+
+**N=5 validates modestly better than N=7**: same DPOY-agreement rate as
+N=7 (34.6%) but a higher top-30 hit rate (47.7% vs 46.6%) -- N=5 dominates
+N=7 on both metrics simultaneously, not a tradeoff between them. Neither
+window beats the RAW baseline on the top-30/AP-All-Pro metric (both step
+down ~3-4pp) -- a real, honestly-reported mixed result, not a clean win:
+smoothing measurably IMPROVES the model's ability to pick the single best
+defender (DPOY #1 agreement, the harder, more decisive test) at a real
+but modest cost to the broader top-30 hit rate. Plausible mechanism (not
+independently confirmed further this pass): some genuine single-season
+INT spikes ARE recognized by real AP voters even without sustained
+history (award voters do reward big-INT years on their own merits
+sometimes), so smoothing trades away a little of that alignment in
+exchange for a cleaner #1-ranking signal.
+
+### 27.4 The Charlie West case -- direct before/after, real numbers
+
+1971 MIN, `additive_score_1971_min.csv`'s own 28-player pool, recomputed
+with smoothed int (weights, including INT's 0.6808, held fixed):
+
+| Rank basis | #1 | Charlie West's rank | Paul Krause's rank |
+|---|---|---|---|
+| RAW (§25.4 baseline) | Charlie West | **1** | 3 |
+| Trailing N=5 | Alan Page | **10** | 1 |
+| Trailing N=7 | Alan Page | **10** | 1 |
+
+Charlie West's real career-int trace through 1971 (`WestCh20`, PFR
+official season-defense data, rookie season 1968): `0, 0, 1, 7` --
+`int_smooth5 = int_smooth7 = 2.0` (only 4 real seasons exist, so both
+windows use the same available history; the task's own "use whatever's
+available" rule for short careers). His INT-component of score drops from
+`0.6808*7 = 4.766` to `0.6808*2.0 = 1.362` -- **he drops from #1 to #10 of
+28** on the team under BOTH windows, out of the top tier entirely. **Yes,
+this fixes the Charlie West case, directly and unforced** -- and Alan
+Page, the real 1971 NFL MVP (the first defensive player ever to win it),
+becomes the model's #1 for that team-season once West's outlier year is
+smoothed against his real, thin career rate -- a genuinely pleasing,
+UNPLANNED alignment with historical recognition, not something tuned to
+happen.
+
+**Does it preserve credit for genuinely sustained production? Real
+control case, same team-season**: Paul Krause (MIN FS, the NFL's real
+all-time career INT leader, 81 for his career) had 6 INT in 1971 --
+close to but not above West's raw 7. His real trace, `12, 6, 2, 8, 7, 5,
+6, 6` (1964-1971): `int_smooth5 = 6.4`, `int_smooth7 = 5.71` -- both
+close to his real 1971 total (6), since he was already at his own stable
+rate. His rank IMPROVES under smoothing (3rd raw -> **1st** under both
+windows, once West's inflated raw number no longer outranks him) --
+smoothing doesn't just penalize outliers, it correctly rewards a player
+whose season matches his real established level relative to someone whose
+season was an aberration.
+
+### 27.5 Recommendation
+
+**N=5 over N=7** -- strictly dominates on the 1999-2024 validation (higher
+top-30 hit rate, equal DPOY agreement) and gives an identical, fully
+correct answer on the Charlie West/Paul Krause case (both windows agree
+there only because West's career was too short at the time for the window
+size to matter yet). Not adopted into any live formula this task --
+same standing as §25's additive formula itself: a validated, documented
+alternative for a future adoption decision, not wired into `dpvs/idi.py`.
+
+### 27.6 Files
+
+`dpvs/int_smoothing.py` (new), `scripts/build_int_smoothing_validation.py`
+(new), `data_output/idi_additive_fit_dataset_int_smoothed.csv` (new). No
+changes to `dpvs/idi.py`, `dpvs/composite.py`, or `dpvs/position_credit.py`
+-- fully independent of §26. Left fully uncommitted, per this task's own
+instruction.
+
+---
+
+## 28. Interior-DL Double-Team Undervaluation Research — Technique Research Extension, Score-Differential Rushing Tables, Two WOWY Case Studies, Exceptionally-Gifted Tier-Boost Proposal (2026-08-24)
+
+**Motivating problem (user's own framing):** defensive tackles and nose
+tackles who eat double-teams get undervalued by counting stats, because
+eating a double-team is precisely what SUPPRESSES their own sack/tackle
+numbers while making everyone else's (the MLB behind them, the DE next to
+them) better. TCS's fixed-role point tables (§26) already give a flat
+role-based credit that doesn't depend on the player's own counting stats,
+which addresses the mechanism partway -- this section investigates whether
+a SPECIFIC exceptional player (the user's example: Joe Greene) should get
+MORE than the generic role value, and what real evidence could justify
+that rather than a hand-picked multiplier.
+
+Five parts, in priority order per the task's own instruction (Parts 1/3/4
+prioritized over the more open-ended Part 2).
+
+### 28.1 Part 1 — Turney/PFJ technique research extension (4 new URLs)
+
+Fetched and read in full (not just search summaries) the 4 requested Pro
+Football Journal (John Turney) posts, cross-checked against the existing
+research doc and the 16 pre-existing `dt_technique_overrides.json`
+entries to avoid duplication. Per the user's own framing ("most players
+will play the 'standard' position... the important signal is specifically
+players called out as DIFFERENT from standard"), extraction focused on
+explicit run/pass-side or technique-number distinctions, not exhaustive
+labeling of every name mentioned.
+
+**Result: `dpvs/dt_technique_overrides.json` grew from 16 to 30 entries**
+(14 new, real-quote-cited additions, verified well-formed JSON after the
+edit). New players, all with a direct verbatim quote from one of the 4
+source posts as evidence (full citation text in the JSON itself):
+
+- **Michael Dean Perry** (CLE, 3-technique) — was already High-confidence
+  documented in the prior research doc but had never actually been added
+  to the override table (a real gap in the 2026-08-24 build, not a
+  deliberate exclusion) — filled now, reinforced by an independent PFJ
+  quote comparing him directly to Aaron Donald/Geno Atkins.
+- **Tim Bowens** (MIA) / **Russell Maryland** (DAL) — both 1-technique,
+  "played over centers rather than guards," explicit two-down
+  run-stuffer framing.
+- **Anthony McFarland** (TAM, 1-tech) — directly paired with the
+  already-confirmed Sapp 3-tech entry: "allowing Warren Sapp to play the
+  three-technique and free-wheel to the quarterback."
+- **Tony Casillas** (DAL, 1-tech) — confirmed post-Landry/post-Flex era
+  (Jimmy Johnson/Switzer), so standard numbering applies, unlike Randy
+  White's still-excluded Flex-era case.
+- **Norman Hand** (NOR, 1-tech) / **La'Roi Glover** (NOR, 3-tech, a
+  second, new team-scope entry alongside his existing Dallas-scoped one)
+  — explicit complementary pairing; this is in fact Glover's most
+  decorated 3-technique stretch (led the NFL in sacks 2000, First-team
+  All-Pro), a real gap the original Glover entry had flagged as
+  unconfirmed.
+- **Hollis Thomas** (PHI, 1-tech), **Jimmie Jones** (RAM, 1-tech, paired
+  explicitly with D'Marco Farr's existing 3-tech finding), **Joe Nash**
+  (SEA, 1-tech, scoped to his 4-3 seasons only — roughly half his career,
+  the 3-4/4-3 split handled automatically at apply time same as Donald's
+  entry), **Chris Hovan** (MIN, 3-tech, Medium confidence — source hedges
+  with "some") / **Fred Robbins** (MIN, 1-tech) as a paired duo, **Jurrell
+  Casey** (OTI, 3-tech, Medium confidence — source itself flags real
+  positional movement), **Kawann Short** (CAR, 3-tech, High confidence).
+
+**Considered but excluded** (with reasons, not silently dropped): Keith
+Traylor (real technique language but unresolvable team/scheme scoping
+across 4 teams), Bob Golic and Isaac Sopoaga (too hedged / wrong scheme),
+John Parrella (no actual technique-number language in the real article
+text, despite an earlier AI paraphrase implying otherwise), David Logan/
+Jeff Wright/Alvin Wright (3-4 nose, out of this table's 4-3-only scope),
+Ernie Holmes (ties him to Greene's Stunt 4-3 by association but states no
+technique number of his own — and this table's own readme already names
+Holmes as the cautionary example against inference-based assignment, so
+deliberately left out), and D'Marco Farr/Merlin Olsen/Randy White
+(re-encountered, no new evidence found to overturn their already-
+documented excluded/unresolved status).
+
+**Out-of-scope findings, reported but NOT added to the DT-only JSON**
+(from the two DE-focused posts — "Top 3-4 Defensive Ends" and "4-3
+Defensive Ends on the Nose"): a substantial list of DE-specific run/pass
+side-splits and 3-4-end two-gap-vs-one-gap distinctions (Elvin Bethea,
+Justin Smith, Lyle Alzado, Leonard Marshall, Carl Hairston, Barney
+Chavous — explicit "built for two-gap assignments," Jacob Green, Curtis
+McGriff — explicitly named "prototype run-stopper, no pass rush," and
+more) that don't fit this JSON's DT-only schema. Two are worth flagging
+for a future DE-side override table if this project builds one: **Cedrick
+Hardman** ("cocked on the center in a five-man line") echoes the exact
+"Cocked Nose-tackle"/"cock nose" terminology this project's prior research
+already traced from Joe Greene to Michael Dean Perry via DC Bud Carson —
+a possible third data point for that coaching lineage, though Hardman's
+own coaching connection to Carson isn't established here. **Dan Hampton**
+(Bears) is extensively documented across three different scheme roles
+(1979-81 DE, nickel tackle, 1985-87 "46" nose) — parallel to the
+already-excluded Otis Sistrunk case (real, but no fixed base technique to
+encode).
+
+**Files**: `dpvs/dt_technique_overrides.json` (30 entries, up from 16).
+
+### 28.2 Part 2 — Score-differential-conditioned rushing tendency tables (1999-2024)
+
+**The problem:** raw rushing volume/yards/YPC in a game is confounded by
+score-driven play-calling (a team up 21+ just runs to kill clock; a team
+down big abandons the run entirely), which makes it hard to tell "this
+defense stopped the run" from "the opponent wasn't trying to run because
+the game was already decided."
+
+**Methodology and its real limits** (full detail in
+`scripts/build_score_diff_rushing.py`'s module docstring): this project
+has NO true play-level possession-tracked score-state data for 1999-2024
+at usable coverage. `~/data/pfref/raw/boxscores/{season}/*/pbp.csv` has
+real play-level rows (down/distance/detail text/running score columns)
+but no explicit offense-team column, so attributing a specific play's
+rushing yards to a specific team requires drive-level possession tracking
+(kickoff-receiver parsing, punt/turnover detection) -- judged too large a
+build given this task's explicit instruction to prioritize Parts 1/3/4
+over this one. Two real, DOCUMENTED proxies are used instead, at two
+different granularities, rather than one blended silently:
+
+1. **Final score differential** (game-level proxy, used for items 1-2, the
+   league baseline and per-team-season deviation): each team-game's OWN
+   final margin buckets that team-game's rushing stats. Coarser than true
+   point-in-time state (a team that led by 21 in Q4 but won by 3 is
+   bucketed "close"), but real, sourced (`gold.games`), and exactly the
+   fallback the task itself explicitly sanctioned: "If true in-game
+   score-state isn't available at the granularity needed, use final score
+   differential as a documented proxy and say so explicitly."
+2. **Halftime score differential** (real mid-game state, used for item 3,
+   the close-game defensive-deterrence signal, since granularity matters
+   most there): derived from `silver.game_scoring_pfr`'s actual
+   scoring-play log (quarter + running score per real scoring play, not
+   assumed) -- the score at the last first-half scoring play, or 0-0 if
+   none. This captures real in-game timing the final-score proxy misses.
+   Still can't isolate second-half-only rushing (`gold.team_game_stats`
+   has no half-split) -- item 3 compares FULL-GAME rushing stats between
+   games that were/weren't close AT HALF, not rushing accumulated only
+   during the close portion. This is the single biggest fidelity gap in
+   this deliverable.
+
+**1. League-wide baseline** (own offense's rushing tendency by own
+final-margin bucket, n=6,690 regular-season team-games, 1999-2024):
+
+| Bucket | Team-games | Rush att/gm | Rush yds/gm | YPC |
+|---|---|---|---|---|
+| trailing 21+ | 1,189 | 20.60 | 81.71 | 3.90 |
+| trailing 14-20 | 1,171 | 20.96 | 86.93 | 4.07 |
+| trailing 7-13 | 1,797 | 22.46 | 93.98 | 4.12 |
+| within 6 | 5,066 | 27.22 | 112.78 | 4.09 |
+| leading 7-13 | 1,797 | 31.62 | 130.86 | 4.10 |
+| leading 14-20 | 1,171 | 33.23 | 143.23 | 4.28 |
+| leading 21+ | 1,189 | 34.11 | 156.81 | 4.58 |
+
+A clean, monotonic confound exactly as expected: leading 21+ teams run
+65% more often and gain nearly double the rushing yards of trailing 21+
+teams, confirming the baseline behaves sanely before using it to judge
+any specific defense. (Table row counts don't sum to 2x team-games because
+"within 6" spans a 13-point-wide bucket vs 7-point spans elsewhere --
+by design, matching the buckets specified in the task.)
+
+**2. Per-team-season deviation**: `data_output/score_diff_rushing_team_season_1999_2024.csv`
+(9,284 rows) — for every team-season and score-margin bucket, both the
+team's OWN offensive tendency (`metric_type=own_offense`) and what
+opponents did AGAINST that team's defense (`metric_type=opponent_faced_by_defense`,
+bucketed by the OPPONENT's own final margin that game), each with
+`att_dev`/`yds_dev`/`ypc_dev` vs. the league baseline for that same bucket.
+
+**3. The close-game defensive signal** (the one the user is after
+specifically): using the halftime-based real state, three buckets —
+close-at-half (|margin| <= 10, n=10,350 team-games), mid (11-16,
+n=2,114), blowout-at-half (17+, n=916):
+
+| ht_state | games | opp rush att/gm | opp rush yds/gm | opp YPC |
+|---|---|---|---|---|
+| close_at_half | 10,350 | 27.22 | 113.71 | 4.12 |
+| mid_10_to_16 | 2,114 | 26.94 | 115.76 | 4.22 |
+| blowout_at_half | 916 | 27.26 | 116.71 | 4.17 |
+
+Interestingly the league-wide gap between close and blowout games is
+small (113.7 vs 116.7 yds/gm) — most of the score-driven rushing-volume
+effect shows up at the FINAL-margin level (item 1's much larger spread,
+81.7 to 156.8), not at the halftime-state level, which makes sense: most
+individual games are still "close enough to matter" at halftime even ones
+that blow open in the second half, so halftime state alone is a weaker
+score-narrative signal than final state. This matters for interpreting
+item 3 below — deviations there are real, but the effect they're isolating
+is smaller in absolute terms than a first glance at item 1 would suggest.
+
+Team-season deviations for the close-at-half subset (`data_output/
+score_diff_close_game_defense_1999_2024.csv`, 829 team-seasons with >=4
+qualifying games): the **top of the list (opponents ran the LEAST vs.
+league average, in games that were genuinely close at halftime)** is
+dominated by defenses with real, independently-confirmed historical
+reputations — 2010 PIT (-49.6 yds/gm), 2000 RAV (-45.5), **2006 MIN
+(-47.8, the Pat/Kevin Williams peak year found independently in Part 3
+below — real cross-validation between two independently-built parts of
+this task)**, 2001 PIT, 2011 SFO (Justin Smith/Patrick Willis), 2009 GNB.
+This is a legitimate, real, standalone candidate signal, complementary to
+`run_pass_points.py`'s existing YPC-vs-expected metric — it isolates
+volume suppression specifically in the portion of games where the
+opponent still had a real incentive to keep running, rather than folding
+garbage-time abandonment into the same number.
+
+**Caveat, stated plainly**: this table was intentionally NOT built to the
+full rigor of a true possession-tracked play-level pipeline (deprioritized
+per the task's own instruction). A future pass building real per-play
+possession attribution from `pbp.csv` (kickoff-receiver + punt/turnover
+state tracking) would let item 3 isolate rushing that occurred ONLY while
+the game was still close, rather than full-game totals for games that
+were close at one checkpoint — a real fidelity upgrade if this line of
+work continues.
+
+**Files**: `scripts/build_score_diff_rushing.py`; `data_output/
+score_diff_rushing_baseline_1999_2024.csv`, `score_diff_rushing_team_season_1999_2024.csv`,
+`score_diff_halftime_league_baseline_1999_2024.csv`, `score_diff_close_game_defense_1999_2024.csv`.
+
+### 28.3 Part 3 — Case study: MIN 2005-2013, Pat Williams / Kevin Williams
+
+**Tenure, confirmed from `silver.player_team_seasons_pfr` (not assumed):**
+Pat Williams (player_id 4900) — MIN 2005-2010 exactly, matching the user's
+stated span (LDT all six seasons, 3-4 DT with Buffalo before that).
+Kevin Williams (player_id 13353) — MIN 2003-2013, the entire span
+requested (LDE as a 2003 rookie, RDT every year 2004-2013).
+
+**Methodology**: reused `dpvs/run_pass_points.py`'s exact live LOO
+(leave-one-out) opponent-expected mechanism — not raw team totals. For
+every MIN game, "expected" = that week's specific opponent offense's own
+season rushing average (excluding this game), so a below-expected number
+means MIN held THAT SPECIFIC OFFENSE below what it normally does, not
+just below some league-wide number.
+
+**Real, opponent-adjusted results** (`scripts/case_study_min_williams.py`
+→ `data_output/case_study_min_williams_2005_2013.csv`):
+
+| Season | Rush yds allowed/gm | YPC allowed | % below opponent-expected rush yards | vs. league avg (pct pts) |
+|---|---|---|---|---|
+| 2005 | 115.1 | 3.85 | 0.0% | +1.2 |
+| 2006 | 61.6 | 2.61 | 46.0% | +47.3 |
+| 2007 | 74.1 | 3.09 | 29.0% | +30.3 |
+| 2008 | 76.9 | 3.40 | 31.0% | +32.3 |
+| 2009 | 87.1 | 3.87 | 23.0% | +24.3 |
+| 2010 | 102.2 | 3.85 | 9.0% | +10.3 |
+| 2011 | 107.0 | 3.87 | 9.0% | +10.1 |
+| 2012 | 105.8 | 3.97 | 7.0% | +8.3 |
+| 2013 | 110.4 | 4.12 | 3.0% | +4.3 |
+
+**This confirms the user's prior, on the real opponent-adjusted data, not
+just raw totals**: 2005 is genuinely anomalous (dead flat, exactly league
+average — Pat Williams' first MIN year, unit not yet gelled). 2006-2008 is
+historically dominant — 29-46% below what opponents normally gain on the
+ground, 30-47 points above league average in the same terms; 2006 in
+particular (61.6 yds/gm, 2.61 YPC allowed) is an outright historic mark.
+2009-2010 stays real and strong (23%, 9% below expected) but is already
+declining from the 2006-2008 peak. **Post-Pat-Williams (2011-2013)
+declines steadily and almost monotonically toward league-average** — 9%,
+7%, 3% below expected, i.e. by 2013 MIN's run defense was barely better
+than a league-average unit despite Kevin Williams still starting every
+game. The data doesn't just confirm the user's prior loosely — it
+reproduces the SHAPE of it almost exactly (flat → historic peak → strong-
+but-declining → decline-to-average after the partner leaves), and the
+2006 finding independently cross-validates against Part 2's own top-15
+close-game run-deterrence list (2006 MIN appears there too, built from a
+completely different data source and methodology).
+
+**One honest complication**: this is a TEAM/DUO-level finding, not a
+single-player WOWY isolating either Williams individually — both were on
+the roster for all nine seasons except 2005/2011-2013 partial overlap
+gaps, so this case study cannot separate "Pat Williams' personal marginal
+value" from "Kevin Williams' personal marginal value" from "the specific
+Pat+Kevin pairing/scheme fit." It confirms the DUO's dominance and its
+real decline after Pat Williams' departure; it does not by itself prove
+which of the two players (or the combination) was doing the driving.
+
+### 28.4 Part 4 — Case study: PIT 1969-1978, Joe Greene DT-partner WOWY
+
+**Partners at the OTHER 4-3 DT spot, confirmed from
+`silver.player_team_seasons_pfr` (franchise_id=29), not assumed from the
+user's named list**: Chuck Hinton (1969-70), Lloyd Voss (1971 primary,
+with Ben McGee starting 4 games the same season), Ben McGee (1972),
+**Ernie Holmes (1973-1976, FOUR seasons — a major partner the user's
+named list omitted entirely; a Front Four/"Steel Curtain" starter in his
+own right)**, Steve Furness (1977 primary, Holmes started 6 games before
+a mid-season trade), John Banaszak (1978 primary, Furness started 5
+games). The user's five named players (Hinton, Voss, McGee, Furness,
+Banaszak) were all real and correctly timed — Holmes was the one real,
+sizeable gap, and by games-started volume the SINGLE LARGEST partner era
+of the ten seasons (56 games, more than double any other single partner).
+
+**Season-by-season opponent-adjusted rush defense** (same LOO methodology
+as Part 3, `scripts/case_study_pit_greene.py`):
+
+| Season | Rush yds allowed/gm | YPC allowed | % below opponent-expected | Partner |
+|---|---|---|---|---|
+| 1969 | 123.7 | 3.72 | -2.8% | Hinton |
+| 1970 | 119.9 | 3.38 | +1.6% | Hinton |
+| 1971 | 105.9 | 3.31 | +7.9% | Voss/McGee split |
+| 1972 | 122.5 | 3.78 | +6.3% | McGee |
+| 1973 | 118.0 | 3.35 | +15.2% | Holmes |
+| 1974 | 114.9 | 3.39 | +12.0% | Holmes |
+| 1975 | 130.4 | 4.16 | +9.9% | Holmes |
+| 1976 | 104.1 | 3.15 | +28.9% | Holmes |
+| 1977 | 123.1 | 3.51 | +14.4% | Furness (Holmes 6 GS) |
+| 1978 | 110.9 | 3.37 | +23.2% | Banaszak (Furness 5 GS) |
+
+**By partner era** (games-weighted): Hinton -0.6% (n=28), Voss/McGee-split
++7.9% (n=14), McGee +6.3% (n=14), **Holmes +16.5% (n=56)**, Furness +14.4%
+(n=14), Banaszak +23.2% (n=16). On its face this looks like a clean story
+(Hinton-era near league-average, later eras much stronger) — **but this is
+NOT a clean isolated-partner effect, and should not be reported as one**:
+partner eras track calendar time almost exactly, and PIT's whole defense
+improved enormously over this decade for reasons that have nothing to do
+with the other DT spot specifically — Jack Ham (1971+), Jack Lambert
+(1974+), Mel Blount's Hall-of-Fame peak, and general scheme maturation
+under Bud Carson/George Perles all landed inside this same window. The
+partner-era comparison is confounded with the team's own dynasty
+trajectory and cannot be cleanly attributed to which player played next
+to Greene.
+
+**The cleaner natural experiment — games Greene himself missed**,
+confirmed via `silver.game_starters_pfr` + `gold.player_game_stats` (not
+assumed): Greene has a real, confirmed absence in only two seasons —
+**1975 (4 games missed: game_ids 2650, 2689, 2704, 2708) and 1977 (1 game:
+3090)**. (A third apparent gap, 1973 game 2722, turned out to be
+played-but-not-started — Greene has a real gamebook stat line that game —
+so it's excluded from "true absence.")
+
+| Game | Season | Opponent | Rush yds allowed | vs. expected | Final margin |
+|---|---|---|---|---|---|
+| 2650 | 1975 | vs. OTI (home) | 92 | +39.5% below expected | 7 (PIT won 24-17) |
+| 2689 | 1975 | at NYJ | 141 | +5.4% below expected | 13 (PIT won 20-7) |
+| 2704 | 1975 | vs. CLE (home) | 122 | +8.2% below expected | 14 (PIT won 31-17) |
+| 2708 | 1975 | vs. CIN (home) | 123 | +5.7% below expected | 21 (PIT won 35-14) |
+| 3090 | 1977 | at NYJ | 209 | **-92.8% (way ABOVE expected)** | 3 (PIT won 23-20) |
+
+**Honest, non-clean finding — reported as such, not smoothed over**: the
+mean across all 5 absence games is -6.8% (worse than expected), against a
++12.2% season-average baseline for 1975+1977 combined — which LOOKS like a
+real "PIT was worse without Greene" signal. But **4 of the 5 games are
+individually AT OR ABOVE the team's normal level without him (mean +14.7%
+excluding the one outlier)** — it is a single game (3090, at NYJ, week 11
+1977) that flips the whole average negative: NYJ ran 46 times for 209
+yards against an expected 108, a genuinely extreme rushing day, in a game
+PIT still won by a field goal (a "close" game by Part 2's own margin
+logic, so it can't be dismissed as garbage-time noise either). **With n=5
+and one dominant outlier, this case study cannot support a confident,
+generalizable "Greene's absence measurably hurt PIT's run defense"
+conclusion — the signal reverses depending on whether that one game is
+included.** This is exactly the kind of result the task asked to be
+reported plainly rather than forced into a clean narrative.
+
+**Files**: `scripts/case_study_pit_greene.py`; `data_output/
+case_study_pit_greene_season_1969_1978.csv`, `case_study_pit_greene_partner_era.csv`,
+`case_study_pit_greene_absent_games.csv`.
+
+### 28.5 Part 5 — Proposed "exceptionally gifted" tier-boost mechanism (DESIGN ONLY — not wired into production)
+
+**The ask**: give a specific player extra TCS credit beyond the generic
+role value when they're an exceptional talent at their assigned
+technique — Greene should get more than a generic 1-technique DT, even
+though Holmes and Greene are both nominally in a similar interior-DL role.
+This needs a real, evidence-based trigger and a defensible magnitude, not
+a vibes-based multiplier.
+
+**Why the WOWY findings above are a weak anchor for magnitude, and that's
+being said plainly rather than papered over**: Part 4's absence-game
+effect size is not usable as a precise multiplier input — it reverses sign
+depending on one outlier game out of five, which is not a stable estimate
+of anything. Part 4's partner-era comparison shows a real gap (Hinton-era
+-0.6% vs. Holmes-era +16.5%) but that gap is confounded with PIT's whole-
+team dynasty trajectory (Ham, Lambert, Blount all arriving in the same
+window), not isolated to the DT spot. **Part 3's finding is real and much
+more robust (large N — 6-9 full seasons per data point, consistent shape,
+independently cross-validated against Part 2's own top-15 list) but it is
+a DUO/team-level finding, not a single-player isolation** — it shows what
+an elite interior-DL PAIR can do to team-level rush defense (29-46%
+below opponent-expected at peak), not what a single exceptional player's
+own marginal share of that is.
+
+**Proposed trigger** (multi-signal, evidence-required, no stats-based
+guessing — consistent with this whole project's standing rule that a
+technique/quality assignment needs a real citation, per `dt_technique_overrides.json`'s
+own precedent):
+
+A player qualifies for the boost in a given season ONLY if ALL of:
+1. **Resolved technique identity** — already has a non-default,
+   evidence-cited technique entry (not the generic "(other) DT" /
+   "(other)" bucket) in `dt_technique_overrides.json` or an equivalent
+   future override table for other DL positions.
+2. **Sustained, multi-year recognition** — real data from
+   `gold.player_awards`, not inference: at least 3 seasons of 1st-team
+   All-Pro/All-Conference recognition from a major selector (AP, PFWA,
+   NEA, UPI, Sporting News) at that position, OR at least 2 seasons with
+   a DPOY-class award (AP DPOY, NEA DPOY, or equivalent). Confirmed
+   directly for Joe Greene: 1st-team All-Pro/All-Conf. in 8 of his 10
+   seasons in this window (1969-1979) plus 2 AP/NEA DPOY awards
+   (1972, 1974) — comfortably clears this bar. Ernie Holmes, by contrast,
+   has exactly two 2nd-team recognitions in the same window and zero
+   DPOY-class awards — real data confirming he does NOT qualify, which is
+   the correct outcome (the tier-boost should distinguish Greene from his
+   own DT partners, not just from a generic replacement-level player).
+3. **Direct contemporary-source acclaim** — an explicit "best of
+   era"/"prototype"/signature-scheme-innovation citation from the Part 1
+   research corpus (`docs/deferred/09_dl_technique_research_pilot_20260823.md`
+   and this section's own 28.1), not just a stats database. Greene's
+   "Stunt 4-3" and the independent Dr. Z "Cocked Nose-tackle"
+   corroboration already satisfy this.
+
+This is intentionally a high bar — it is expected to qualify a small
+handful of historically-inarguable players (Greene, and by the same
+standard likely Randle/Sapp/Donald/Aaron-Donald-tier 3-techniques already
+in the overrides file), not a large fraction of confirmed-technique DTs.
+
+**Proposed magnitude**: given the fragility of the direct WOWY effect
+size, do NOT back out a precise multiplier from Part 4's numbers. Propose
+a flat **+10% multiplier on the player's resolved role's fixed point
+value** (`run_tier_points` and/or `pass_tier_points`, whichever phase(s)
+the citation supports — Greene's documented role is run-side-dominant per
+his 1-technique identity, so the boost would apply to `run_tier_points`
+specifically, not both phases automatically) for any qualifying
+player-season. Reasoning for +10% specifically: small enough that it
+cannot swap a qualifying player's overall ranking against a non-qualifying
+elite peer on its own (it's a tie-breaker/margin adjustment, not a new
+tier), but large enough to matter over a full career's accumulated TCS.
+This is explicitly a PROVISIONAL, conservative starting point, not a
+number derived with the same rigor as `run_pass_points.py`'s own
+empirically-fit weights — it should be revisited if a larger-N study
+(more qualifying players' own individual absence games, not just Greene's
+5) produces a real, stable effect size to fit against instead.
+
+**Validation path before any production wiring** (not done in this task,
+proposed for a future pass): backtest the +10% boost against the existing
+overrides list (Randle, Sapp, Millard, Donald, Kennedy, etc.) to confirm
+it doesn't produce an implausible ranking swing anywhere in the corpus,
+and specifically re-run the Greene-vs-Holmes 1974 TCS comparison (the
+same case that motivated dropping stats-based DT guessing in §26.4, where
+Holmes' own raw tackle volume exceeded Greene's) to confirm the boost
+correctly reverses that specific known-bad comparison without needing a
+stats-based shortcut.
+
+**Not done in this task (design only, per the task's own instruction)**:
+no code changes to `dpvs/position_credit.py`, `dpvs/position_weights.py`,
+or `dpvs/dt_technique.py`. No new override table or schema field created.
+
+### 28.6 Files (all this section)
+
+- `dpvs/dt_technique_overrides.json` — extended (Part 1), see its own
+  diff for exact new entries.
+- `scripts/build_score_diff_rushing.py` (new) — Part 2.
+- `scripts/case_study_min_williams.py` (new) — Part 3.
+- `scripts/case_study_pit_greene.py` (new) — Part 4.
+- `data_output/score_diff_rushing_baseline_1999_2024.csv`,
+  `score_diff_rushing_team_season_1999_2024.csv`,
+  `score_diff_halftime_league_baseline_1999_2024.csv`,
+  `score_diff_close_game_defense_1999_2024.csv` (new) — Part 2.
+- `data_output/case_study_min_williams_2005_2013.csv` (new) — Part 3.
+- `data_output/case_study_pit_greene_season_1969_1978.csv`,
+  `case_study_pit_greene_partner_era.csv`,
+  `case_study_pit_greene_absent_games.csv` (new) — Part 4.
+- Part 5 is design-only; no new code files.
+
+All work in this section is left uncommitted per the task's own
+instruction.
+
+---
+
+## 29. HOF Interior-DL WOWY Sample-Size Extension — Page, Olsen, Lilly, Pooled Detrended Test Against the Greene Case (2026-08-24)
+
+Extends §28.4's Greene/PIT WOWY case study to three more Hall-of-Fame-era
+interior defensive linemen (Alan Page/MIN, Merlin Olsen/LA Rams, Bob
+Lilly/Dallas) using the exact same opponent-adjusted LOO methodology
+(`dpvs/run_pass_points.py`'s production mechanism, not a new one), to get
+real independent season-level sample size for the underlying question:
+does a great DT's specific individual talent show up in team-level
+opponent-adjusted defense, independent of who plays next to them. Single-
+career tests are underpowered (a handful of seasons per partner-era); this
+pools 4 careers to get genuine power. Script: `scripts/case_study_hof_dt_wowy.py`.
+
+### 29.1 Real roster-verified partner eras — every place the real data
+differs from the assumed list
+
+Pulled directly from `silver.player_team_seasons_pfr` (`position IN
+('LDT','RDT','DT')`, ranked by `games_started` per season), not assumed:
+
+**Alan Page (MIN 1967-1978, CHI 1978-1981)** — scoped to MIN only; 1978
+is a genuine in-season split (6 GS MIN, then traded to CHI for 10 GS) with
+no clean way to include CHI without leaving the DT-partner comparison
+frame entirely, so it's excluded, not silently folded in. Page was LDT in
+1967 only, RDT every year after — the "other" DT spot flips slot
+accordingly. Real partners: **Paul Dickson (1967)**, **Gary Larsen
+(1968-1973, 6 seasons)**, a genuine split season (**1974**: Sutherland 8
+GS, Larsen 6 GS), **Doug Sutherland (1975-1977)**. The user's list wasn't
+given for Page specifically (the task only asked to verify the run-vs-pass
+framing), so there's no gap to report here the way Holmes was for Greene.
+
+**Merlin Olsen (LA Rams 1962-1976)** — the user's 7-partner list (LoVetere,
+Grier, Brown, Talbert, Bacon, Phil Olsen, Brooks) is **entirely correct
+and correctly timed**: LoVetere (1962), Grier (1963-1966, 4 seasons),
+Brown (1967-1968), **Bacon (1969)**, **Talbert (1970)**, a split
+1971-1972 (Phil Olsen/Nelson, then Phil Olsen/Brooks), Brooks (1973-1976,
+4 seasons). Both Talbert and Bacon — flagged by the task as "more commonly
+known as DEs" elsewhere — are confirmed **RDT** in `football_db`'s real
+position field specifically for these Rams seasons, not DE; the user's
+framing holds up against the real data here, unlike the Greene case where
+a real partner (Holmes) was missing entirely.
+
+**Bob Lilly (Dallas 1961-1974)** — real position data shows Lilly was
+**LDE in 1961-1963**, not at DT at all; he moved to **RDT in 1964** and
+stayed there through 1974. So the task's assumed 1961-1974 "DT tenure"
+overstates it by 3 years — the real DT-partner window is 1964-1974. Within
+that window the user's two-partner list is exactly right: **Jim Colvin
+(1964-1966, 3 seasons)**, **Jethro Pugh (1967-1974, 8 seasons)** — no
+third partner, no split season, the cleanest of the four by roster
+structure exactly as the task predicted.
+
+**A real, hard data-coverage boundary, not a bug**: `gold.games` /
+`gold.team_game_stats` (this whole warehouse's game-level source) has a
+confirmed floor at **season 1967** (`SELECT MIN(season) FROM gold.games`
+= 1967; 1967-1968 are the earliest seasons with any `team_game_stats`
+rows). This silently kills two of the four cases' earlier partner eras:
+**Olsen's LoVetere (1962) and all four Grier seasons (1963-1966) are not
+computable**, and **Lilly's entire Colvin era (1964-1966) is not
+computable** — Colvin's whole tenure predates the database, which
+collapses Lilly from the intended clean two-era comparison into a
+single-era descriptive case only. This is reported plainly rather than
+faked or silently dropped; see §29.3.
+
+### 29.2 Per-season opponent-adjusted run defense — raw yards, %, and
+z-score, all three, all four cases
+
+`gap_rush_pct_z` is the same production quantity as `run_points_earned`
+in `dpvs/run_pass_points.py` (z-scored within season, across the whole
+league, not just this team). Full season-by-season tables are in
+`data_output/case_study_{greene,page,olsen,lilly}_season.csv`; by
+partner era:
+
+**Greene (PIT, 1969-1979 — re-pulled/extended one season past §28.4's
+1969-1978 so the Holmes-vs-post-Holmes window below has its full n=3
+vs n=3)**:
+
+| Partner era | Seasons | n | % below expected | z-score |
+|---|---|---|---|---|
+| Hinton | 1969-70 | 2 | -0.6% | 0.006 |
+| Voss/McGee-split | 1971 | 1 | +7.9% | 0.196 |
+| McGee | 1972 | 1 | +6.3% | 0.172 |
+| **Holmes** | 1973-76 | 4 | +16.5% | 0.419 |
+| Furness | 1977 | 1 | +14.4% | 0.373 |
+| Banaszak | 1978 | 1 | +23.2% | 0.594 |
+| Dunn | 1979 | 1 | +23.8% | 0.591 |
+
+**Page (MIN, 1967-1977)**:
+
+| Partner era | Seasons | n | % below expected | z-score |
+|---|---|---|---|---|
+| Dickson | 1967 | 1 | -19.0% | -0.409 |
+| **Larsen** | 1968-73 | 6 | +10.4% | 0.269 |
+| Larsen/Sutherland-split | 1974 | 1 | +6.3% | 0.181 |
+| Sutherland | 1975-77 | 3 | +4.9% | 0.133 |
+
+**Olsen (LA Rams, 1967-1976 — 1962-1966 not computable, see §29.1)**:
+
+| Partner era | Seasons | n | % below expected | z-score |
+|---|---|---|---|---|
+| Brown | 1967-68 | 2 | +28.7% | 0.695 |
+| Bacon | 1969 | 1 | +17.5% | 0.452 |
+| Talbert | 1970 | 1 | +16.6% | 0.431 |
+| PhilOlsen/Nelson-split | 1971 | 1 | +15.3% | 0.366 |
+| PhilOlsen/Brooks-split | 1972 | 1 | +2.8% | 0.084 |
+| **Brooks** | 1973-76 | 4 | +26.1% | 0.660 |
+
+**Lilly (Dallas, 1967-1974 — 1964-1966/Colvin not computable, see §29.1)**:
+
+| Partner era | Seasons | n | % below expected | z-score |
+|---|---|---|---|---|
+| Pugh (only computable era) | 1967-74 | 8 | +23.7% | 0.590 |
+
+### 29.3 Per-player season-level significance tests (not game-level —
+game-level pseudo-replicates within a season, same objection as §28.4)
+
+For each career: (1) a raw two-sample t-test on season-level z between
+the two named era windows; (2) the same test after **detrending** — each
+career's season z-scores regressed on season number (career-relative
+index), residuals taken, THEN compared across eras — since a team's own
+secular improvement trend can swamp a real partner effect if not removed
+first (exactly what §28.4 found for PIT).
+
+| Career | Trend slope/season | r | p(trend) | Era A vs. B (n) | Raw t / p | Detrended t / p |
+|---|---|---|---|---|---|---|
+| Greene (PIT) | +0.062 | 0.875 | **0.000** | Holmes 74-76 (3) vs. post-Holmes 77-79 (3) | t=-0.56, p=0.62 | t=0.79, p=0.50 |
+| Page (MIN) | -0.0006 | -0.006 | 0.987 | Larsen 68-73 (6) vs. Sutherland 75-77 (3) | t=0.57, p=0.59 | t=0.56, p=0.60 |
+| Olsen (LAR) | -0.0005 | -0.007 | 0.984 | Brown 67-68 (2) vs. Brooks 73-76 (4) | t=0.45, p=0.68 | t=0.41, p=0.71 |
+| Lilly (DAL) | -0.033 | -0.363 | 0.377 | **not computable** (only one real era, see §29.1) | — | — |
+
+**A genuinely interesting, unforced side-finding**: PIT is the ONLY one of
+the four teams with a real, statistically significant within-career
+secular trend (p<0.001, r=0.875 — defense mechanically got better almost
+every year of the decade regardless of DT partner). MIN and LA Rams show
+essentially **zero** trend (r≈-0.01 for both) across Page's and Olsen's
+tenures — so §28.4's specific worry (a dynasty-wide trend swamping the
+DT-partner signal) was a real PIT-specific confound, not a universal
+property of these long defensive-line careers. This matters for reading
+the pooled result honestly: detrending barely moves Page's or Olsen's
+numbers (because there's almost no trend to remove) but changes Greene's
+comparison from a small negative raw gap to a small positive one.
+
+None of the three computable within-career comparisons reach significance
+at p<0.05 on the run metric, raw or detrended.
+
+**PASS metric (ANY/A gap), same era windows, run for all four as a bonus
+(requested at minimum for Page)**: Page Larsen-years mean_z=0.574 vs.
+Sutherland-years mean_z=0.347 (raw t=1.30 p=0.24, detrended t=0.84
+p=0.43) — not significant, but directionally the SAME shape as his run
+metric (Larsen years stronger). Olsen: Brown 0.580 vs. Brooks 0.307 (raw
+t=2.07 p=0.13, detrended t=1.18 p=0.32) — also not significant. **Greene's
+detrended pass comparison came back p=0.022** (Holmes-years 0.556 vs.
+post-Holmes 0.472) — flagged explicitly as **not trustworthy as a
+standalone finding**: this whole exercise ran on the order of 15-20
+implicit comparisons (4 careers × up to 2 metrics × 2 detrend states, plus
+3 pooled tests), and a single p≈0.02 result is exactly what plain chance
+produces at that volume — it does not survive even a rough Bonferroni
+correction (0.05/19 ≈ 0.0026). Reported for completeness, not as
+evidence of anything.
+
+**The user's own Page hypothesis, checked directly against real numbers,
+holds up**: career-average run z for Page is **0.162** — the LOWEST of
+the four cases (Greene 0.329, Olsen 0.536, Lilly 0.590) — while his
+career-average PASS z is **0.417**, the HIGHEST of the four. Page really
+was, on this data, the least run-dominant and most pass-dominant of the
+four interior-DL cases studied here. This is a real, data-confirmed
+asymmetry, not just restating the user's framing back.
+
+### 29.4 Pooled analysis across all 4 careers
+
+Following the task's own detrend-then-compare design: each career's
+season z-scores are regressed on season number and reduced to residuals
+(removing that team's own within-career secular trend) BEFORE any
+cross-career comparison, so a pooled test isn't just re-detecting "one
+team got better over time" (§28.4's own finding for PIT specifically).
+
+**Fisher's combined-p test**, combining the 3 computable within-career
+detrended t-tests (Greene, Page, Olsen — Lilly excluded, no computable
+2nd era) into one omnibus significance test, valid because each career is
+a genuinely independent study:
+individual p-values [0.496, 0.597, 0.711] → chi2=3.115 (df=6), **combined
+p = 0.794**. No signal, pooled.
+
+**One-way ANOVA**, residual run z-score regressed on player-era group
+(18 distinct player-era groups nested across all 4 careers, n=40 season-
+level observations, including Lilly's single Pugh-era group): **F=0.728,
+p=0.746**. No signal.
+
+**Directional consistency (secondary, intuitive check)**: in all 3
+computable careers, the LATER named era's detrended residual was LOWER
+than the earlier one (Greene Holmes→post-Holmes: 0.040→-0.057; Page
+Larsen→Sutherland: 0.106→-0.027; Olsen Brown→Brooks: 0.156→0.126) — 0/3
+positive. A binomial sign test on n=3 is far too small to be meaningful
+(p=0.25, can't reject the null of no consistent direction), but it's
+worth naming plainly: if anything, this pooled sample leans toward LATER
+partner-eras scoring slightly worse on detrended residual run defense,
+the opposite of a "the more famous/tenured partner made the defense
+better" story — and even that lean is not remotely statistically
+supported at this n.
+
+### 29.5 Honest bottom line
+
+**This remains genuinely inconclusive, even pooled across 4 independent
+HOF-caliber interior-DL careers.** Every formal test run in this section —
+3 individual within-career detrended t-tests, a Fisher combined-p pooling
+them, and an 18-group one-way ANOVA on the full pooled residual sample —
+comes back non-significant. This is not a failure of the pooling idea:
+n=4 careers (3 with a computable second era) is still a small number of
+independent studies by any standard, and a real database-coverage floor
+(1967) removed exactly the two comparisons (Olsen/Grier, Lilly/Colvin)
+that might have added the most additional power, since they were the
+longest and cleanest remaining partner eras in the assumed source list.
+**What this task DID establish with real confidence**: the specific
+mechanism worried about in §28.4 (a team-wide secular trend swamping a
+partner effect) is real and severe for PIT specifically, but is NOT a
+universal property of a decade-plus interior-DL career — MIN and the Rams
+show close to zero such trend across Page's and Olsen's tenures
+respectively, which is itself a useful, unforced finding for anyone using
+this project's opponent-adjusted z-scores as a raw career-length input
+elsewhere. And Page's own run-vs-pass asymmetry (lowest run z, highest
+pass z of the four cases) is a real, directly-confirmed data point
+supporting the user's own priors about his game. But on the CENTRAL
+question — does a specific DT's individual talent show up in team-level
+defense independent of partner — this larger, better-pooled test lands in
+the same honest place §28.4's single Steelers case did: **no detectable
+effect, at a sample size still too small to rule one out either.**
+
+### 29.6 Files
+
+- `scripts/case_study_hof_dt_wowy.py` (new) — all 4 cases, real
+  roster-verified partner eras, run + pass metrics, per-career detrended
+  significance tests, pooled Fisher/ANOVA/sign tests.
+- `data_output/case_study_{greene,page,olsen,lilly}_season.csv`,
+  `case_study_{greene,page,olsen,lilly}_partner_era.csv` (new) — per-case
+  season-level and era-level tables (raw yards gap, % gap, z-score, both
+  run and pass metrics).
+- `data_output/case_study_4dt_pooled_residuals.csv` (new) — the full
+  40-row pooled detrended-residual dataset the §29.4 tests ran on.
+- `scripts/case_study_pit_greene.py` (§28.4, unchanged) — original
+  Greene-only case study; §29's re-pull extends but does not replace it.
+
+All work in this section is left uncommitted per the task's own
+instruction.
+
+---
+
+## 30. Pre-1967 Data Load, Metric Methodology Refinements, DPOY Sack-Threshold Test, and the Nose-Tackle/MLB Natural Experiment (2026-08-24)
+
+Continues §28/29's WOWY/natural-experiment line of research: flips the axis
+(holds the NOSE TACKLE constant, varies the MIDDLE LINEBACKER, instead of
+the reverse), fixes a real infrastructure gap those sections hit (the
+1967 floor on `gold.games`/`gold.team_game_stats`), and tests two new,
+directly falsifiable user hypotheses (a DT/NT DPOY sack threshold; five
+new NT/MLB natural-experiment cases). Four parts, prioritized per the
+task's own instruction (Parts 2/3 over Part 4; Part 0 to a real validated
+partial state over pushing all the way to 1950).
+
+### 30.1 Part 0 — Pre-1967 data load (real infrastructure fix)
+
+**Confirmed the premise, then found it was messier than "just remove the
+floor."** `scripts/load_pfr_franchises_games.py`'s `MIN_SEASON = 1967` was
+a deliberate but never-actually-load-bearing scope decision (its own
+docstring said gamebooks "don't meaningfully exist before 1967" — but
+`gold.games`/`gold.team_game_stats` are pure PFR team-level box score data
+with zero gamebook dependency). Real PFR box scores exist on disk back to
+1950 (`~/data/pfref/raw/boxscores/1950/` onward) — confirmed directly, not
+assumed.
+
+**What actually blocked a naive 1950 load, found by checking real data
+before trusting a bulk load (exactly as the task asked):**
+1. **AFL games are entirely absent from the local archive for 1960-1966**
+   — confirmed directly (the 1960/1963/1966 box-score folders contain
+   zero AFL team abbreviations; Super Bowl I is the only AFL crossover,
+   showing up as `kan` in the 1966 folder). This local archive is
+   NFL-only pre-merger, a real gap on top of the already-documented
+   1967-1969 AFL opponent-stats gap in `football_db` — not fixed here
+   (would require new scraping, out of scope).
+2. **Regular-season length was wrong for 1953-1960** — the loader
+   hardcoded 14 games for every season before 1978; real NFL history is
+   12 games 1947-1960, 14 from 1961. Confirmed directly against real
+   per-team game counts in the raw data (1950/1951/1955/1958/1960 all
+   show the expected 12-game pattern, including a real, correctly-shaped
+   1958 tiebreaker-game anomaly — see below). Fixed in
+   `regular_season_games()`.
+3. **PFR's own sacked-yards stat label changed between 1963 and 1964**
+   (`"Sack Yds Lost"` → `"Sacked-Yards"`, same fields/format) — the
+   parser only recognized the new label. Fixed with a synonym match.
+4. **Three real one-season/short-lived NFL franchises (1950-1952) have no
+   entry in `franchise_abbrev_map.csv`** — `bcl` (the original 1950
+   Baltimore Colts, folded after one season, NOT the same franchise as
+   the 1953+ Colts using `clt`), `dtx` (the 1952 Dallas Texans, folded
+   after one season, not the unrelated AFL team of the same name that
+   became the Chiefs), `nyy` (New York Yanks, 1950-1951). Modeling these
+   correctly means representing a franchise with no "current" identity,
+   which doesn't fit `gold.franchises`' schema — a real follow-up, not
+   attempted here. **Per the task's own explicit permission to stop at a
+   validated boundary rather than force a 1950 load, `MIN_SEASON` was set
+   to 1953, not 1950** — every abbreviation 1953-1966 was confirmed to
+   resolve cleanly before loading.
+5. **A real franchise_aliases gap, found only by loading and checking,
+   not by inspecting the source CSV in isolation**: `crd` (Chicago
+   Cardinals) has a BLANK `abbrev` field in `franchise_year_abbrev.csv`
+   for 1920-1959 (confirmed — the widest blank-abbrev gap of 12 affected
+   franchise/year spans found; most others are pre-1953 and out of
+   scope). This silently dropped every Cardinals game 1953-1959 from the
+   first load pass (103 skipped games) — caught by a real, unexpected
+   symptom (the 1958 NFL Championship tiebreaker game, Giants vs.
+   Browns, classified as `game_type='regular'` instead of `'playoff'`,
+   because Cleveland's own per-team game list was short one game — the
+   missing Cardinals matchup — throwing off the chronological
+   game-count cutoff used to detect the playoff boundary). Fixed with one
+   corrective `INSERT` into `gold.franchise_aliases` (`crd`, franchise_id
+   8, 1953-1959) rather than reworking `load_franchises()`'s one-time,
+   already-guarded load path. Re-running after the fix recovered exactly
+   84 previously-skipped games (7 seasons × 12 games) and the tiebreaker
+   game now classifies correctly (`playoff`/`conf`, `1958-12-28`
+   championship still `playoff`/`sb`).
+
+**Result**: `gold.games`/`gold.team_game_stats` now span **1953-2025**
+(15,211 games, up from 14,016), NFL-only for 1953-1966. Spot-checked
+against real history: the 1958 Eastern Conference tiebreaker + NFL
+Championship classify correctly; 1953-1966 per-season game counts match
+known NFL schedules exactly (61-62 team-games/season through 1960, jumping
+to 79 in the 1960 13-team season, 99 in 1961's 14-team/14-game season).
+
+**A second real bug found while validating `compute_run_pass_points_earned()`
+on the new range (exactly the "spot-check before trusting the extended
+range" step the task asked for)**: `pass_points_earned` came back a flat
+`0.0` for entire seasons 1953-1960, 1962, and 1963 — not because those
+seasons had no signal, but because PFR's own box scores for those seasons
+record a sacked-yards line for only 2-4 games out of ~150 each season (an
+independent, genuine sparse-data pattern from finding #3 above — even
+where the label matches, most individual games just don't have the field
+filled in). This made `any_a` (which needs sack yards) NaN for nearly
+every row, which made the within-season standard deviation NaN, which hit
+`_zscore_within_season()`'s degenerate-sigma fallback — which returned
+`0.0`, silently indistinguishable from "this game was exactly average."
+Confirmed this fallback is NEVER hit for any 1961/1964+ season (including
+the entire pre-existing 1967-2025 range), so it was a real, previously-
+latent bug this extension exposed rather than caused. Fixed: the fallback
+now returns `NaN` instead of `0.0` (`dpvs/run_pass_points.py`), so callers
+can tell "no signal computable" from "computed and genuinely average."
+**`run_points_earned` has no such gap** — rush yards/attempts are complete
+back to 1953 — so it's trustworthy for the full extended range;
+`pass_points_earned` should only be trusted from 1964 on. Both caveats are
+now documented directly in the module docstring.
+
+**Spot-check, real numbers**: 1963 Chicago Bears (the historically
+dominant title-winning defense) show `run_points_earned` mean +0.32 across
+15 games (positive, i.e. real, opponent-adjusted above-average run
+defense); 1953 Chicago Cardinals (a genuinely bad team) show -0.12. Sane
+in both direction and rough magnitude.
+
+**Not attempted**: 1950-1952 (the 3-franchise gap above), any correction
+to the pre-1960 AFL absence. Both are real, stated, follow-up-able gaps,
+not silently-passed-over ones.
+
+### 30.2 Part 1 — Metric methodology additions
+
+Built as genuine additions alongside the existing mean-based, opponent-
+adjusted z-score gap (`dpvs/run_pass_points.py`'s `gap_rush_pct`/
+`run_points_earned`), not replacements, per the task's own instruction.
+All three were wired into the new Part 3 NT/MLB script
+(`scripts/case_study_nt_mlb_wowy.py`) and run on real data, not built in
+the abstract.
+
+**(a) Median-YPC-based version** (`season_table_median()`): season-level
+MEDIAN yards-per-carry allowed (not mean), and a gap against the
+opponent's own season-median YPC (not LOO at the per-game level — a
+median isn't additively decomposable across games the way a sum is, so
+this uses the opponent's full-season median as the baseline, a real,
+stated simplification vs. the mean-based LOO version). Run for all 5 NT
+cases (§30.4) — see that section for whether it changed the picture.
+
+**(b) Close-game subset restriction** (`close_game_subset()`): reused the
+final-score-differential proxy §28.2 built and the task's own text
+explicitly sanctions ("if true in-game score-state isn't available at the
+needed granularity, use final score differential as a documented proxy
+and say so explicitly") — |home_score − away_score| ≤ 8. Applied uniformly
+across all 5 NT cases rather than mixing granularities (several of the 5
+cases predate `silver.game_scoring_pfr`'s reliable halftime-state
+coverage, so the finer §28.2 halftime proxy isn't usable for all of them).
+
+**(c) Single OLS regression, pooled across careers**: given each
+individual case has only 6-12 season-level observations (too few to
+support its own regression, the same problem §29's per-career tests ran
+into), this pools all 5 NT cases' within-era-comparison seasons (n=28)
+into one model: `gap_rush_pct_z ~ C(team) + season_idx + late_era +
+rush_yards_expected` — team fixed effects, a within-career season-index
+trend term, a binary "later-named partner era" indicator, and an
+opponent-strength control (that game's opponent's own LOO-expected rush
+yards, season-averaged). Chose plain OLS over mixed-effects: with only 5
+groups (teams) and n=28, a random-effects model would be badly
+underpowered to distinguish within- from between-team variance — team
+fixed effects are the more honest choice at this sample size, same
+reasoning §28-29 implicitly used via per-career detrending.
+
+**Whether Part 1 changed the picture — reported honestly**: **no, not
+much.** The median-YPC version (30.4) tracks the same qualitative shape as
+the mean version in every one of the 5 cases (no season where median and
+mean gaps disagree on sign). The close-game subset (30.4) shrinks sample
+sizes a lot (as few as n=5 per era) and doesn't reverse any era ranking
+within a case. The pooled OLS's `late_era` coefficient is **-0.025, p=0.797**
+— not remotely significant, matching §29.4's own pooled-ANOVA null
+finding on the DT-side analysis almost exactly. **This is itself the
+useful finding the task asked for**: switching metrics doesn't change the
+conclusion, which means the original mean/z-score approach wasn't
+misleading this line of research — it's a real null result, not a
+methodology artifact.
+
+### 30.3 Part 2 — DPOY sack-rate threshold, tested directly
+
+Pulled every real DT/NT DPOY-class award (`gold.player_awards`,
+`designation IN ('DPOY','DPOY-AFC','DPOY-NFC')` across AP/NEA/PFWA/
+101Awards, `position IN ('DT','NT','LDT','RDT')`) — **18 unique
+player-seasons, 23 award-rows** (several players won multiple orgs' DPOY
+the same season). Sacks summed from `gold.player_game_stats` per season,
+prorated to 16 games using real `games_played` from
+`silver.player_team_seasons_pfr` (same games-played-based prorating
+convention used elsewhere in this project).
+
+| Season | Player | Games played | Sacks (DB) | Sacks/16-game pace | Data completeness |
+|---|---|---|---|---|---|
+| 1970 | Alan Page | 14 | 4.0 | 4.57 | **incomplete — only 9/14 games have a logged stat line** |
+| 1971 | Alan Page | 14 | 5.0 | 5.71 | **incomplete — 6/14** |
+| 1972 | Joe Greene | 14 | 7.0 | 8.00 | 9/14 (total matches the well-known published figure exactly) |
+| 1973 | Alan Page | 14 | 3.0 | 3.43 | **incomplete — 8/14** |
+| 1974 | Alan Page | 14 | 8.5 | 9.71 | **incomplete — 10/14** |
+| 1974 | Joe Greene | 14 | 10.5 (DB) / **11.5 published** | 12.00 (DB) / **13.14 published** | 12/14 — DB undercounts by 1.0 sack vs. the well-known published total |
+| 1975 | Curley Culp | 14 | 10.0 | 11.43 | 13/14, near-complete |
+| 1976 | Jerry Sherk | 14 | 3.5 | 4.00 | **incomplete — 7/14** |
+| 1978 | Randy White | 16 | 16.0 | 16.00 | 16/16, complete |
+| 1981 | Joe Klecko | 16 | 17.0 | 17.00 | 16/16, complete |
+| 1983 | Dave Butz | 16 | 9.0 | 9.00 | 13/16, mostly complete |
+| 1983 | Doug Betters | 16 | 14.5 | 14.50 | 16/16, complete |
+| 1989 | Michael Dean Perry | 16 | 5.0 | 5.00 | 14/16, mostly complete |
+| 1989 | Keith Millard | 16 | 16.0 | 16.00 | 15/16, near-complete |
+| 1992 | Cortez Kennedy | 16 | 11.0 | 11.00 | 16/16, complete |
+| 1997 | Dana Stubblefield | 16 | 11.5 | 11.50 | 16/16, complete |
+| 1999 | Warren Sapp | 15 | 13.5 | 14.40 | 14/15, near-complete |
+| 2000 | La'Roi Glover | 16 | 18.0 | 18.00 | 16/16, complete |
+| 2015 | Aaron Donald | 16 | 11.0 | 11.00 | 16/16, complete |
+| 2017 | Aaron Donald | 14 | 12.0 | 13.71 | 14/14, complete |
+| 2018 | Aaron Donald | 16 | 18.5 (DB) / 20.5 published | 18.50 / 20.50 | 16/16 — DB undercounts by 2.0 vs. published |
+| 2020 | Aaron Donald | 16 | 13.0 | 13.00 | 14/16 |
+| 2022 | Chris Jones | 17 | 12.0 | 11.29 | 15/17 |
+
+**Confirm or complicate, reported honestly, not rounded in the user's
+favor**: the threshold **mostly holds but is not exceptionless — there
+are real, data-complete counter-examples.** Data-complete misses below
+~10: **Joe Greene 1972 (8.0, matches the user's own citation exactly)**,
+**Michael Dean Perry 1989 (5.00, well-covered at 14/16 games — a clean,
+confirmed counter-example, not a data artifact)**, and **Dave Butz 1983
+(9.00, 13/16, a near-miss)**. Everyone else who is data-complete clears
+the bar comfortably, several by a wide margin (White 16.0, Klecko 17.0,
+Glover 18.0, Donald every year, Sapp 14.4). **Alan Page is the biggest
+open question, not a confirmed counter-example**: all four of his
+DPOY-recognized seasons show low prorated rates (3.4-9.7), but every one
+of them is flagged data-incomplete (only 43-71% of his games have a
+logged stat line in this DB) — there is a real, documented project-wide
+finding (`project_pfr_pbp_text_completeness_gap_20260820`) that this exact
+kind of box-score-derived sack count undercounts real totals, and Page's
+own 1970s-Vikings-era coverage is the sparsest in this whole table. **This
+should be reported as inconclusive for Page, not as a confirmed exception
+to the threshold** — it very plausibly is one (Page not clearing 10 in any
+of his DPOY seasons would be the single most consequential real
+complication to the hypothesis, since he's arguably the most decorated DT
+of the pre-1980 era with multiple actual DPOY wins), but this task doesn't
+have a reliable enough season-total source for his era to say so with
+confidence.
+
+**The Greene 1972/1974 reframing, checked directly against real
+numbers**: **1972 does NOT clear the ~10-sack 16-game bar** (7 sacks/14
+games = 8.0 at pace, confirmed, matches the user's own citation exactly —
+a real complication to the "always 10+" framing, from arguably the single
+most decorated 4-3 DT of the era). **1974 DOES clear it, and clears it
+regardless of which total is used**: this DB's own game-log sum (10.5
+sacks) prorates to 12.0, and the well-known published total (11.5 sacks —
+matching the user's own citation) prorates to 13.14. The 1.0-sack gap
+between the two is the same known PFR-completeness-gap pattern flagged
+above, not a real disagreement about whether 1974 clears the bar — it
+clears either way.
+
+**Albert Haynesworth, the user's own comparison case, pulled directly
+(not from the DPOY table — confirmed he never actually won an official
+DPOY award, AP or otherwise, in either year)**: 2007 — 6.0 sacks, 13 games
+played (12 started), = **7.38 at 16-game pace**; 2008 — 8.5 sacks, 14
+games played (14 started) = **9.71 at 16-game pace**, real AP/PFWA/SN
+1st-team All-Pro both years (`gold.player_awards` confirms). This
+**confirms, not complicates, the "pass-rush emergence" framing directly**:
+his sack total nearly quadrupled from 2006 (2.0) → 2007 (6.0) → 2008
+(8.5), a real, large, data-complete rise, not noise. And it's a clean,
+consistent data point for the threshold hypothesis on its own terms too —
+he came very close (9.71 in 2008) but never actually cleared ~10 either
+year, and never actually won DPOY either year (James Harrison won AP DPOY
+2008; Bob Sanders won 2007) — both facts point the same direction.
+
+### 30.4 Part 3 — Nose-tackle / middle-linebacker natural experiment
+
+Flips §28/29's axis: holds the NOSE TACKLE constant, varies the primary
+MLB/ILB partner (3-4 NTs have no "other DT" to compare against the way a
+4-3 DT does). Reuses `dpvs/run_pass_points.py`'s production LOO mechanism
+via `case_study_hof_dt_wowy.py`'s own helper functions (not
+reimplemented). **Every one of the five real windows below differs from
+the task's assumed year range in at least one confirmed way — the same
+"every prior case in this line of research found at least one real
+correction" pattern held again**:
+
+- **Michael Carter (SF)**: real tenure is **1984-1992**, not "~1985-91"
+  (1984 is a real 16-game, 0-start rookie year — excluded from the
+  scoped-analysis window but real). Scoped to 1985-1992.
+- **Curley Culp**: **Kansas City 1969-1973 was 4-3 LDT, not a nose tackle
+  at all** (`silver.player_team_seasons_pfr`'s position field says `LDT`,
+  not `NT`) — confirming exactly what the task asked to verify. His real
+  3-4 NT tenure is **Houston Oilers 1975-1980 only** (1974 was a
+  partial-season LDT at Houston, not yet NT). KC is excluded from this
+  comparison entirely for that reason — a genuinely different case than
+  the other four.
+- **Casey Hampton (PIT)**: real tenure **2001-2012 matches the task's
+  assumed range** — the one case with no year-range correction. But PIT
+  ran a 3-4 with TWO starting ILBs most of these seasons (Foote AND
+  Farrior both started 16 games together in 2004, 2007, 2008), not a
+  single "Mike" — "the MLB partner" here is a real, stated simplification
+  (higher-games-started ILB each season), not a clean single-slot
+  comparison the way a 4-3 gives.
+- **Ted Washington**: there are **two different real "Ted Washington"
+  player_ids in football_db** — an unrelated 1970s-80s Houston Oilers OLB,
+  and the actual NT (SF 1991-93 NT/RDT, DEN 1994 LDT, **BUF 1995-2000
+  NT**, CHI 2001-02, NE 2003, LV 2004-05 LDT, CLE 2006-07 NT — 7 teams
+  total). Scoped to **BUF 1995-2000**, his longest single-team NT-labeled
+  stretch — not the task's assumed "~1993-2001," which straddles 4 teams
+  and would conflate MLB-partner effects with team-scheme changes.
+- **Vince Wilfork (NE)**: position field confirms **NT only 2004-2009**;
+  2010 he's LDE and 2011-2014 LDT/DT (a real, confirmed front-role shift
+  within the same team, not a data error), then NT again at Houston
+  2015-2016. Scoped to **NE 2004-2009** as the primary case (matches the
+  task's "~2005-12" only partially — 2010-2012 are real Wilfork seasons
+  but not NT-labeled ones), with **HOU 2015-2016 as a short bonus case**
+  (n=2, no within-career test possible).
+
+**Season-level results** (full tables in `data_output/case_study_nt_
+{carter,culp,hampton,washington,wilfork,wilfork_hou}_season.csv`) — same
+opponent-adjusted LOO mechanism as §28/29, mean-based and median-based
+(Part 1a) both computed:
+
+| Case | Era A (n) | Era B (n) | Raw t/p | Detrended t/p | Median-YPC agrees w/ mean? |
+|---|---|---|---|---|---|
+| Carter (SFO) | Ellison 85-86 (2) | Walter 87-89 (3) | t=-0.38, p=0.74 | t=-0.05, p=0.97 | yes, same sign every season |
+| Culp (OTI) | Kiner 75-78 (4) | Stringer/Hunt 79-80 (2) | t=2.29, **p=0.086** | t=0.24, p=0.83 | yes |
+| **Hampton (PIT)** | Foote/Farrior 04-08 (5) | Timmons 11-12 (2) | t=2.50, p=0.064 | **t=2.87, p=0.042** | yes |
+| Washington (BUF) | Spielman 96-97 (2) | Holecek 98-2000 (3) | t=-1.59, p=0.22 | t=-0.46, p=0.68 | yes |
+| Wilfork (NWE) | Bruschi 04/06/07 (3) | Mayo 08-09 (2) | t=1.24, p=0.41 | t=0.32, p=0.80 | yes |
+
+**Hampton is the one individually-significant result in this whole task**
+(detrended p=0.042) — but flagged explicitly as **not trustworthy as a
+standalone finding**, same reasoning §29.3 used for Greene's own p≈0.02
+pass-metric result: this task ran 5 within-case comparisons (plus the
+pooled OLS), and a single p≈0.04 is close to what plain chance produces at
+that volume even before a formal multiple-comparisons correction (a rough
+Bonferroni bar would be ~0.01). Reported for completeness, consistent with
+this whole line of research's standard for not overselling a single
+significant result out of several tests.
+
+**Close-game subset (Part 1b)** shrinks samples a lot (n as low as 5-11
+per era) and, as in Part 1's summary above, never reverses an era ranking
+within a case — e.g. Hampton's Farrior-heavy eras stay clearly ahead of
+the bookend eras even restricted to close games (0.44-0.51 vs.
+Bell/Holmes 0.46, Timmons 0.43 — genuinely flat across close games, unlike
+the fuller-sample table's larger spread).
+
+**Pooled OLS (Part 1c)**: `late_era` coefficient **-0.025, se=0.096,
+p=0.797** — no detectable effect of the later-named MLB/ILB partner era
+once team, within-career trend, and opponent strength are controlled for
+simultaneously. Team fixed effects DO matter (PIT and SFO both show real,
+positive, significant team-level intercepts vs. the baseline — unsurprising,
+those are simply strong defenses across the whole window) but the
+era-transition term itself carries no signal. **This is the direct answer
+to "does the nose tackle show more or less independent effect than the
+4-3 DT comparisons in §28/29"**: essentially the same — no detectable
+individual-level MLB-partner effect, matching §29's own null finding on
+the DT side almost exactly (§29.4's pooled ANOVA: F=0.728, p=0.746; here:
+p=0.797). The natural-experiment axis flip did not surface a different
+answer.
+
+**Missed-games WOWY (each NT's own confirmed absences)** — cross-checked
+game-by-game presence detection (`gold.player_game_stats` +
+`silver.game_starters_pfr`) against each season's real `games_played`
+count from `silver.player_team_seasons_pfr` as ground truth before
+trusting any result, since a first pass surfaced real false positives in
+seasons where the player had actually played every game (a genuine,
+disclosed reliability gap in this project's box-score coverage for older/
+lesser-documented seasons, not a bug in this task's own logic). **Casey
+Hampton 2004 is the one clean, fully-validated case** (flagged 10 missed
+games, exactly matching the real 6-of-16 games-played shortfall): mean
+`gap_rush_pct_z` in those 10 games = **+1.009**, nearly DOUBLE his own
+2004 season average (+0.672) and well above his 12-season career average
+(+0.549). **Honest, counter-intuitive finding, reported as such**: PIT's
+run defense looked measurably BETTER, not worse, in the specific games
+Hampton missed to a torn ACL in 2004 — the opposite of what a "great NT
+matters" prior would predict, on real, validated data (n=10, one season,
+so not a basis for a general claim, but a real and surprising data point).
+Michael Carter and Curley Culp's flagged missed-game counts didn't
+cleanly match real season-level shortfalls closely enough across every
+season to trust individually (noisier presence-detection coverage for
+1980s data) — not reported as findings for that reason. Ted Washington
+had zero confirmed missed games in his scoped 1995-2000 BUF window (real
+`games_played` was 16 every season but 1995, matching).
+
+### 30.5 Part 4 — Great-NT/great-MLB confluence table
+
+Roster-verified every player's real tenure (`silver.player_team_seasons_pfr`)
+before building the table — **six of the eight had a real correction to
+the task's assumed range**:
+
+| MLB | Assumed range | Real range (verified) | Primary NT/DT partner(s), roster-verified |
+|---|---|---|---|
+| Ray Lewis (BAL) | ~1997-2010 | **1996-2012** (rookie year + 2 extra late seasons) | James Jones/Siragusa (1997-99) → Sam Adams/Siragusa (2000-01) → **Kelly Gregg (2002-2010, 8 seasons, by far the longest single partner)** → Haloti Ngata (2006-08 overlap at the other DT slot, NT 2008+) → Terrence Cody/Kemoeatu (2011-12) |
+| Luke Kuechly (CAR) | 2012-19 | 2012-19 (matches) | Star Lotulelei (2013-2017, primary) with Kawann Short as complementary 3-tech; Dontari Poe (2018-19) |
+| Mike Singletary (CHI) | ~1983-91 | **1981-1992** (2 extra seasons on each end) | Jim Osborne (1981-83) → **Dan Hampton/Steve McMichael (1984-92, the "46 defense" front four era, both Hall-of-Famers)** → William Perry rotating in from 1985 |
+| Bobby Wagner (SEA/others) | ~2014-24 | **2012-2025** (2 extra early SEA seasons; also LAR 2022, WAS 2024-25 not just SEA) | Brandon Mebane (2012-2015, primary) → Ahtyba Rubin (2015-16) → Sheldon Richardson/Jarran Reed (2017-18) → Poona Ford (2019-21, NT-labeled) |
+| Dick Butkus (CHI) | ~1965-72 | **1965-1973** (1 extra final, injury-shortened season) | Stan Jones/Earl Leggett (mid-60s roster churn) → **John Niland-era DT rotation** → Jim Osborne emerging by 1973 (Osborne became Singletary's own partner a decade later — a real cross-generation link at the same DT spot) |
+| Willie Lanier (KC) | ~1968-74 | **1967-1977** (4 extra late seasons the assumed range omitted entirely, plus 1 extra rookie year) | **Buck Buchanan (1967-1975, 9 seasons — both Hall-of-Famers, the single longest and most decorated pairing in this whole table)**, with **Curley Culp as the OTHER starting DT 1969-1973** — a real, direct cross-reference to Part 3's own Culp case: Lanier played alongside both Buchanan and Culp simultaneously for 5 seasons. |
+| Patrick Willis (SF) | ~2007-13 | **2007-2014** (1 extra final, injury-shortened season) | Aubrayo Franklin (2007-2010, primary) → Isaac Sopoaga (2011-12) → Glenn Dorsey (2013) → Ian Williams (2014) |
+| Jack Lambert (PIT) | ~1975-83 | **1974-1984** (1 extra rookie + 1 extra injury-ending final season) | Already covered in full in §28.4/§29 (Hinton→Voss/McGee→**Holmes 1973-76**→Furness→Banaszak→Dunn) — not re-derived here, cross-referenced per the task's own instruction not to duplicate that work. |
+
+**Real missed-game WOWY, computed for the two cases where it was both
+requested and cleanly validatable against real `games_played` ground
+truth**:
+
+**Ray Lewis (BAL)** — three real short seasons, each with an EXACT match
+between flagged missed games and the real games-played shortfall (a much
+cleaner validation than any of Part 3's NT cases): **2002 (5/16 played,
+11 missed, exact match)**, **2005 (6/16, 10 missed, exact match)**,
+**2012 (6/16, 10 missed, exact match)**. Mean `gap_rush_pct_z` across all
+31 missed games = **+0.105**, well below BAL's own 17-season career
+average of **+0.383** (1996-2012). **This is the cleanest individual WOWY
+result in the entire task** (§28/29 included) — real, validated presence
+data, three independent absence seasons, and a real, meaningfully-sized
+gap in the intuitive direction (BAL's run defense measurably worse, not
+better or flat, in games Lewis actually missed).
+
+**Tedy Bruschi (NE)**, checked as the reverse-direction case the task
+asked for (an MLB partner's own missed games, not the NT's) — his 2005
+stroke-recovery season, real `games_played`=9/16, **flagged 7 missed
+games, exact match**: mean `gap_rush_pct_z` in those games = **-0.051**,
+below both NE's full 2005 season average (+0.366) and Bruschi's own
+personal 3-season average across his Wilfork-era tenure (+0.338, from
+§30.4's Wilfork case). **Same direction as Ray Lewis** — worse run
+defense in the games this elite MLB missed. Two independent, exactly-
+validated MLB-absence cases, both pointing the same way, in contrast to
+Part 3's NT-side finding (Hampton: run defense measurably BETTER in his
+missed games) — a real, if small-n, asymmetry between the two positions
+worth flagging: **on this task's real data, the MLB's own absence shows a
+cleaner, more intuitive WOWY signal than the NT's does**, even though
+neither position showed a detectable PARTNER-identity effect (30.4's
+pooled OLS). Absence and partner-identity are different questions, and
+this task's data answers them differently.
+
+**Other real injury-shortened seasons identified but not computed as full
+WOWY** (flagged as real follow-up candidates, not run here per the task's
+own Part 4-lowest-priority instruction): Kuechly 2015 (13/16) and 2016
+(10/16, real, widely-documented concussion issues), Willis 2014 (6/16,
+final season), Wagner 2014 (11/16), Butkus 1973 (9/14, final season),
+Lambert 1977/1980/1982-84 (already covered in §28.4's own absent-games
+analysis for 1975/1977 — 1980/1982-84 not previously checked).
+
+### 30.6 Files
+
+- `scripts/load_pfr_franchises_games.py` — extended `MIN_SEASON` 1967→1953,
+  fixed `regular_season_games()` for the 12-game 1953-1960 era, fixed the
+  `"Sack Yds Lost"`/`"Sacked-Yards"` label synonym (Part 0).
+- `dpvs/run_pass_points.py` — `_zscore_within_season()`'s degenerate-sigma
+  fallback changed from `0.0` to `NaN`; module docstring updated with the
+  1953-2025 range and the pre-1964 `pass_points_earned` caveat (Part 0).
+- One corrective row in `gold.franchise_aliases` (`crd`, franchise_id 8,
+  season_start=1953, season_end=1959) — a live DB fix, not a file, see
+  §30.1 (Part 0).
+- `scripts/case_study_nt_mlb_wowy.py` (new) — Parts 1 and 3: the 5 NT
+  cases, median-YPC metric, close-game subset, pooled OLS, missed-games
+  WOWY.
+- `data_output/case_study_nt_{carter,culp,hampton,washington,wilfork,
+  wilfork_hou}_season.csv`, `..._partner_era.csv`, `..._median_ypc.csv`
+  (new) — per-case season/era tables, Parts 1 and 3.
+- `data_output/case_study_nt_{carter,hampton,wilfork}_missed_games.csv`
+  (new) — missed-games WOWY raw output (Culp/Washington omitted — see
+  §30.4's reliability note).
+- `data_output/case_study_nt_mlb_pooled_residuals.csv`,
+  `case_study_nt_mlb_pooled_ols_input.csv` (new) — Part 1c pooled OLS
+  inputs.
+- Part 2 (DPOY sack threshold) and Part 4 (confluence table, Ray Lewis/
+  Bruschi missed-games WOWY) were run as direct SQL/ad-hoc queries during
+  this task, not saved as standalone scripts — the real numbers are
+  reported in full in §30.3/§30.5 above; rerun via the SQL shown in this
+  section against `football_db` if these need to be reproduced or
+  extended.
+
+All work in this section is left uncommitted per the task's own
+instruction.
+
+---
+
+
 ## Open Questions
 
 - **Eller pre-2001 gamebook supplement:** Use era_plays_all.csv to identify Eller's
@@ -3415,3 +5289,25 @@ left uncommitted, consistent with this whole session.
   as the rare exception) -- rules-driven, not nutrition/training-driven.
   Not started; would need QB career-length + age-curve data plotted
   against these specific rule-change years.
+- **`dpvs/idi.py`'s LIVE 1999-2024 sack/run_stuff/ff/fr numbers likely carry the
+  same pbp.csv-text-undercount confirmed for 1978-1998** (§25.1) -- found as
+  a byproduct of the additive-formula fitting task, not yet fixed or even
+  fully quantified for this specific range. `load_gold_stats_from_db()`'s
+  Postgres path routes ALL of 1978-2025 (not just the explicitly-tagged
+  1978-1998 window) through the same `parse_pfr_pbp.py` play-by-play-text
+  parser; the 2026-08-20 experiment already found real, confirmed missing
+  sacks for elite pass rushers well inside 1999-2024 (Watt 2012, Donald
+  2018, Ware 2008, Miller 2012). The real, officially-sourced fix
+  (`~/data/pfref/raw/season/player/defense/defense_{year}.csv`, used
+  instead for the additive-formula fit, §25.2) is NOT ingested into
+  football_db at all -- a real, currently-unfilled warehouse gap, not
+  something narrow to this one task. Every DPVS-G/IDI number for 1999-2024
+  currently in production should be treated as carrying this same risk
+  until this is fixed or independently ruled out.
+- **Adopt, reject, or blend the §25 fitted additive formula** -- validated
+  (top-30 hit rate 50.5% aggregate, DPOY-order match 30.8%, real out-of-
+  sample agreement on Ham/White 1972 but a genuine reversal on Greene/
+  Holmes 1974) but not wired into any live formula. Open decision: replace
+  the existing rate+shrinkage+volume IDI mechanism with this simpler
+  additive one, keep both as separate reported metrics, or treat this as a
+  validation-only exercise. Not decided in §25.

@@ -11,7 +11,7 @@ as the highest-priority item among several deferred DPVS-G follow-ons** —
 IDI's current formula (`football_analytics/dpvs/idi.py`):
 
 ```
-IDI = 0.23·tackle_share_z + 0.26·tfl_component_z + 0.16·sack_share_z
+IDI = 0.23·tackle_share_z + 0.26·run_stuff_component_z + 0.16·sack_share_z
     + 0.20·int_component_z + 0.16·ff_component_z
 ```
 
@@ -28,39 +28,39 @@ to trust one season's number" is rigorously derived; the piece measuring
 taking seriously and testing directly:**
 
 1. **`sack_share_z` is too low, and structurally under-treated.** Unlike
-   TFL/INT/FF, `sack_share_z` is still computed as a raw team-season share
+   run stuff/INT/FF, `sack_share_z` is still computed as a raw team-season share
    (`sk / team_sk`), z-scored directly — it never got the rate+shrinkage+
    count treatment (`_add_rate_component`) the other three rare-event
    stats received in the §12 rebuild. Nobody has ever measured sack's own
    φ (overdispersion) this session. The user's own read: "I've come to not
    be a fan of sack_share in general as we found they're more additive" —
    meaning sacks (and possibly other stats) behave more like a simple sum
-   that should be compared as a rate/count the way TFL is, not treated
+   that should be compared as a rate/count the way run stuff is, not treated
    as a fixed proportion of a team total. This needs its own φ measurement
    before its treatment can be fixed properly — likely reuses/depends on
    `docs/deferred/02_stat_noise_skill_rating_analysis.md`'s work.
 
-2. **TFL is probably undervalued relative to sacks, for a specific football
+2. **Run stuff is probably undervalued relative to sacks, for a specific football
    reason.** The user's reasoning, given in detail and worth preserving
-   verbatim for whoever picks this up:
+   for whoever picks this up:
 
-   > "I think TFL should probably be higher than Sacks in value as Sacks
+   > "I think run stuff should probably be higher than Sacks in value as Sacks
    > often mean the defensive backfield covered the receivers well (your
    > research by the coaches also noted this to be the case, they even
    > call them 'coverage sacks' although not officially tallied that way).
-   > A TFL almost always is a DL or linebacker blowing up the play,
+   > A run stuff almost always is a DL or linebacker blowing up the play,
    > especially so for the DL/DT as they can't move before the play as
    > they have a hand down on the LOS, so they're winning that battle
-   > decidedly in most cases they get a TFL. Meanwhile a LB is almost
+   > decidedly in most cases they get a run stuff. Meanwhile a LB is almost
    > always on a blitz as the OLB are almost always going downfield to get
    > a sack (so in the backfield) and the MLB really would only go into
    > the backfield to get behind the LOS to get the ball carrier. As they
    > often have a lot of responsibility to cover the middle of the field,
-   > pass, run, etc. So the TFL, especially for a DL (DE, DT, NT and
+   > pass, run, etc. So the run stuff, especially for a DL (DE, DT, NT and
    > secondarily a 3-4 OLB) is often a high skill value play by them."
 
    In short: a sack's value is often shared with (or even mostly earned
-   by) the coverage unit, while a TFL — especially a run-stop TFL by an
+   by) the coverage unit, while a run stuff — especially one recorded by an
    interior lineman who has a literal physical head start (hand down,
    already at the LOS, no coverage responsibility) — is much more purely
    attributable to that individual defender's own skill. This should be
@@ -85,7 +85,7 @@ be derived, distinct from the raw φ number alone:
   this up**: don't block this weight-revisit work on EPA being finished —
   EPA is a large, separate, uncertain project (see that doc). Do the
   skill+rarity-based weight revisit first using what's already
-  measurable (φ, shrinkage behavior, the position-specific TFL/sack
+  measurable (φ, shrinkage behavior, the position-specific run stuff/sack
   reasoning above), and treat EPA-informed value weighting as a SECOND,
   later refinement pass once/if that project lands, not a prerequisite.
 
@@ -97,20 +97,20 @@ be derived, distinct from the raw φ number alone:
    pull its results rather than re-deriving). If sack's φ is genuinely low
    (consistent with the user's "more additive"/coverage-dependent
    intuition), that's real evidence for reducing its independent weight
-   and/or giving it the same rate+shrinkage+count treatment as TFL/INT/FF
+   and/or giving it the same rate+shrinkage+count treatment as run stuff/INT/FF
    rather than a raw team-share.
 
-2. **Test the DL-vs-LB TFL distinction directly.** The user's reasoning
-   implies TFL's skill signal should differ by *which position* records it
-   — a DT/DE TFL should show a stronger, cleaner skill signal than an
-   OLB/MLB TFL (which is more often a scheme/blitz-design outcome). Split
-   the φ/skill-distance measurement for TFL by position group (or finer,
+2. **Test the DL-vs-LB run stuff distinction directly.** The user's reasoning
+   implies run stuff's skill signal should differ by *which position* records it
+   — a DT/DE run stuff should show a stronger, cleaner skill signal than an
+   OLB/MLB run stuff (which is more often a scheme/blitz-design outcome). Split
+   the φ/skill-distance measurement for run stuff by position group (or finer,
    if `docs/deferred/05_position_scheme_grouping_scoping.md`'s work has
    landed) and report whether the data actually supports this — this is a
    real, falsifiable hypothesis, not something to assume true just because
    the reasoning sounds right.
 
-3. **Fix `sack_share_z`'s treatment** in `dpvs/idi.py` to match TFL/INT/FF
+3. **Fix `sack_share_z`'s treatment** in `dpvs/idi.py` to match run stuff/INT/FF
    (`_add_rate_component`, empirical-Bayes shrinkage with a sack-specific
    `k` derived the same way: `k = 8.0/(φ_sack - 1)`) once its φ is known.
    This is a direct, mechanical fix once the measurement above exists.
@@ -121,7 +121,7 @@ be derived, distinct from the raw φ number alone:
    proportional to `(φ_stat − 1)` (the "signal over the pure-chance floor"
    quantity already used for the k-derivation), normalized to sum to 1,
    then sanity-check the result against football intuition (including the
-   DL-TFL-vs-sack finding above) rather than accepting a purely mechanical
+   DL-run stuff-vs-sack finding above) rather than accepting a purely mechanical
    number blindly. Report both the mechanically-derived weights AND the
    final chosen weights if they differ, with reasoning for any deviation.
 
@@ -164,7 +164,7 @@ citable piece of statistical reasoning, not just a changelog entry.
   read in full (it's ~1,100 lines but well-commented; the module docstring
   alone covers most of the existing design reasoning).
 - `football_analytics/docs/framework_decisions.md` §11-§17 — full history:
-  the original TFL/FR reweight, the failed first attempt, the shrinkage
+  the original run stuff/FR reweight, the failed first attempt, the shrinkage
   fix, the name-resolution and Postgres migration work.
 - `docs/deferred/02_stat_noise_skill_rating_analysis.md` — likely a direct
   input to this doc's work; check if it's been completed first.
@@ -175,9 +175,9 @@ citable piece of statistical reasoning, not just a changelog entry.
 ## Known pitfalls
 
 - Don't derive new weights from φ and declare victory without the DL-vs-LB
-  TFL check (#2 above) — the user's reasoning is specific and falsifiable,
+  run stuff check (#2 above) — the user's reasoning is specific and falsifiable,
   test it rather than assuming it.
-- The existing shrinkage `k` values (TFL≈4.73, INT≈14.04, FF≈25.00,
+- The existing shrinkage `k` values (run stuff≈4.73, INT≈14.04, FF≈25.00,
   tackle≈2.07) already encode φ-based trust; don't double-count by also
   cranking the top-level weight for a stat that's already getting light
   shrinkage because it's reliable — the weight is about how much the

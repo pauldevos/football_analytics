@@ -97,7 +97,7 @@ Also fixed: 2-letter team codes (GB, OK, TB, SF, etc.), markdown table pipe-stri
 - Avg unique tacklers: **12.5** (vs ~25-35 expected — selective attribution)
 
 **Known limitations:**
-- ERA1 sack classification unreliable: "thrown for loss" = QB sack AND run TFL; no QB name lookup
+- ERA1 sack classification unreliable: "thrown for loss" = QB sack AND run stuff; no QB name lookup
 - 37% of files are genuine score-sheet-only (not recoverable OCR failures)
 - Some game files appear 2-3× under different names (duplicate OCR pages — deduplicate by play text)
 
@@ -112,7 +112,7 @@ Also fixed: 2-letter team codes (GB, OK, TB, SF, etc.), markdown table pipe-stri
 **Alan Page validation (June 2026, deduped):**
 - **100 sacks** vs. John Turney's historical count of 108.5 through 1977 → 7.8% undercounting
 - Undercounting source: ERA1 strict sack filter misses some "thrown for loss" lines lacking QB context keyword; 37% DEAD game files never OCR'd
-- 100 TFLs, 349 solo tackles, 224 assists across 967 play instances
+- 100 run stuffs, 349 solo tackles, 224 assists across 967 play instances
 - Implied Page sack share of MIN team total: **24.5%** (100 Page / 408 PFR MIN) — reasonable for a dominant DT alongside Eller and Marshall
 
 **Roster-based name validation (June 2026):**
@@ -154,5 +154,5 @@ python team_defense_pipeline.py --team pit --csv pit_gamebooks.csv
 | Gamebook scope = 1967–1977 only | Pre-PFR PBP era; only source for individual play attribution |
 | ERA2 parser fix (June 2026) | 420 of 663 ERA2 rows were LOW-conf due to 3 unhandled format variants — not OCR quality |
 | Team sack count unusable directly from gamebooks | Both teams' plays mixed in same file; ERA1 QB-context filter too strict; use individual player share instead |
-| ERA1 sack detection stays strict | "Thrown for loss" in ERA1 matches both QB sacks and RB TFLs; strict QB-context keyword prevents double-counting |
+| ERA1 sack detection stays strict | "Thrown for loss" in ERA1 matches both QB sacks and RB run stuffs; strict QB-context keyword prevents double-counting |
 | Roster validation: 91.2% match rate is target baseline | 8.8% unmatched = teams without roster files + OCR noise; not parser failure |

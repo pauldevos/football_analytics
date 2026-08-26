@@ -18,7 +18,7 @@ DPVS-G (with WOWY, when available) = 0.50·TCS_z + 0.30·IDI_z + 0.20·WOWY_z
 TCS = Team Credit Share (how much of the *team's* defensive success this
 player's games were part of — built from TDGS, a per-game team defensive
 score with opponent-quality adjustment). IDI = Individual Disruption Index
-(the player's own individual stat production — tackles, TFL, sacks, INT, FF
+(the player's own individual stat production — tackles, run stuff, sacks, INT, FF
 — relative to season × position-group peers; see
 `docs/deferred/04_idi_weight_revisit.md` for that formula's own separate
 revisit).

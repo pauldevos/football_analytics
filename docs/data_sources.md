@@ -179,7 +179,7 @@ Draft position is a reasonable proxy for expected player talent level, useful in
 **What it gives us:**
 - Individual defender named on each play (tackle, sack, fumble forced, etc.)
 - Solo vs. assisted distinction
-- Play type (run, pass, sack, TFL, INT, fumble)
+- Play type (run, pass, sack, run stuff, INT, fumble)
 - Down, distance, yardline (when parseable)
 
 **Coverage:**
@@ -194,9 +194,9 @@ yardline, yardline_side, clock, play_type, player_role,
 is_solo, co_tacklers, ocr_conf, description, play_text
 ```
 
-**Play types:** `RUN | PASS | SACK | TFL | INTERCEPTION | FUMBLE | BLOCKED_KICK | SPECIAL | UNKNOWN`
+**Play types:** `RUN | PASS | SACK | RUN_STUFF | INTERCEPTION | FUMBLE | BLOCKED_KICK | SPECIAL | UNKNOWN`
 
-**Player roles:** `SOLO_TACKLE | ASSISTED_TACKLE | SACK | TFL | PASS_DEF | QB_PRESSURE | FUMBLE_REC | TACKLE_UNKNOWN`
+**Player roles:** `SOLO_TACKLE | ASSISTED_TACKLE | SACK | RUN_STUFF | PASS_DEF | QB_PRESSURE | FUMBLE_REC | TACKLE_UNKNOWN`
 
 **Era-specific format notes:**
 - ERA1 (1967–1973): Sparse attribution, often only notable plays named defenders

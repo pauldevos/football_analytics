@@ -107,15 +107,15 @@ an aggregate value analysis, not a per-player attribution pass. The regex
 patterns themselves are unchanged.
 
 **Primary categories are mutually exclusive per play**, assigned by
-priority `INT > sack > TFL > FR > tackle`, matching this project's own
+priority `INT > sack > run stuff > FR > tackle`, matching this project's own
 boxscore convention that a play lands in exactly one of these columns
 (`gamebooks_boxscores/CLAUDE.md`'s Output Format / Scoring Rules — a sack
 already carries its own Solo-tackle credit rather than also counting as a
 plain tackle, etc.):
-- **tackle** = matches `TACKLE_RE`, and is *not* also a sack/TFL/INT play —
+- **tackle** = matches `TACKLE_RE`, and is *not* also a sack/run stuff/INT play —
   i.e. genuinely the routine case the task asked for ("no other event on
   the play").
-- **TFL** = `LOSS_TACKLE_RE` (non-sack loss), excluding kick plays and sacks.
+- **run stuff** = `LOSS_TACKLE_RE` (non-sack loss), excluding kick plays and sacks.
 - **sack** = `SACK_RE`.
 - **INT** = `INT_RE`.
 - **FR** (fumble recovery) = `FR_RE`, **with one added filter**: the named
@@ -130,7 +130,7 @@ plain tackle, etc.):
 category — a forced fumble and a sack can legitimately co-occur on the same
 play and both numbers should reflect that. Measured directly: **32% of
 FF-tagged plays are also primary-sack plays** (6,434 of 20,074) — the
-other 68% are forced fumbles on tackles, TFLs, or returns.
+other 68% are forced fumbles on tackles, run stuffs, or returns.
 
 ## 4. Real event values
 
@@ -142,17 +142,17 @@ other 68% are forced fumbles on tackles, TFLs, or returns.
 | FF (bonus) | 20,074 | +2.36 | 0.020 |
 | Sack | 50,865 | **+1.75** | 0.005 |
 | FR | 19,975 | +1.67 | 0.020 |
-| TFL | 60,792 | **+1.10** | 0.003 |
+| run stuff | 60,792 | **+1.10** | 0.003 |
 | PD (bonus, 1999+ only) | 51,629 | +0.82 | 0.003 |
 | Tackle (routine) | 894,406 | **-0.36** | 0.001 |
 
 A routine tackle carries a *negative* average value to the defense — this
 is expected, not a bug: "routine tackle" plays are, by construction, every
-play that wasn't a sack/TFL/turnover, i.e. mostly ordinary 3-8 yard
+play that wasn't a sack/run stuff/turnover, i.e. mostly ordinary 3-8 yard
 gains that still favor the offense on average. This is the same
 "not all defensive stats are equally valuable" point the wOBA analogy in
 doc 04 makes: a stop that still concedes real yardage is worth less than a
-stop that erases the play (TFL) or wins the ball outright (INT/FR/sack),
+stop that erases the play (run stuff) or wins the ball outright (INT/FR/sack),
 and now that gap is a real, measured number instead of an assumption.
 
 **By era** (n / mean):
@@ -160,14 +160,14 @@ and now that gap is a real, measured number instead of an assumption.
 | Event | 1978-1985 | 1986-1998 | 1999-2020 | 2021-2025 |
 |---|---|---|---|---|
 | Tackle | 117,944 / -0.246 | 210,672 / -0.269 | 453,156 / -0.415 | 112,634 / -0.431 |
-| TFL | 7,751 / 1.132 | 13,651 / 1.095 | 32,160 / 1.096 | 7,230 / 1.079 |
+| run stuff | 7,751 / 1.132 | 13,651 / 1.095 | 32,160 / 1.096 | 7,230 / 1.079 |
 | Sack | 7,810 / 1.817 | 11,531 / 1.787 | 25,529 / 1.686 | 5,995 / 1.833 |
 | INT | 4,419 / 3.323 | 5,958 / 3.440 | 10,951 / 3.781 | 2,202 / 3.469 |
 | FR | 4,947 / 1.507 | 6,358 / 1.447 | 7,344 / 1.915 | 1,326 / 1.933 |
 | PD | n/a (no data) | n/a (11 rows) | 42,215 / 0.786 | 9,403 / 0.978 |
 | FF | 3,301 / 2.162 | 5,173 / 2.215 | 9,648 / 2.528 | 1,952 / 2.238 |
 
-Full year-by-year values for tackle/TFL/sack/INT/FR are in
+Full year-by-year values for tackle/run stuff/sack/INT/FR are in
 `data_output/event_value_results.json` (`by_year` key) — every year 1978-
 2025 individually, not just the four buckets above.
 
@@ -177,7 +177,7 @@ Full year-by-year values for tackle/TFL/sack/INT/FR are in
 — not the broad shift the hypothesis predicted.** Sack value is real but
 modestly higher in 2021-2025 (1.833) than 1999-2020 (1.686), a ~9%
 relative bump that is many standard errors outside noise (SE ≈0.01 on
-each) but small in absolute EP terms (+0.15 pts). TFL shows essentially no
+each) but small in absolute EP terms (+0.15 pts). run stuff shows essentially no
 shift (1.079 vs. 1.096 — statistically indistinguishable in practical
 terms). Tackle drifts slightly more negative (-0.431 vs -0.415), a small
 continuation of a trend that actually started decades earlier (see below),
@@ -187,7 +187,7 @@ directionally consistent, but far too small and too narrow (one stat, not
 the broad field-position effect predicted) to call confirmed.**
 
 **Early post-Blount-rule "smoothing" (1978-1985 vs. 1986-1998): not
-confirmed.** TFL (1.132 vs 1.095), sack (1.817 vs 1.787), and INT (3.323
+confirmed.** run stuff (1.132 vs 1.095), sack (1.817 vs 1.787), and INT (3.323
 vs 3.440) are all close, with no directional pattern suggesting an
 unsettled early period converging toward a stable later one — if anything
 sack and INT are *slightly lower* in the immediate post-rule years, the
@@ -208,7 +208,7 @@ annotation ("defended by X" in the detail text) is essentially **absent
 from `pbp.csv` before 1999** (0 matches in 1978-1998 except 11 stray rows
 in 1994; 2,031 matches in 1999) — confirmed directly by grepping the raw
 text; (2) this matches a data-completeness boundary already documented
-elsewhere in this project (`parse_pfr_pbp.py`'s own docstring: "blank TFL
+elsewhere in this project (`parse_pfr_pbp.py`'s own docstring: "blank run stuff
 pre-1999" in PFR's `player_defense.csv`). **This reads as a PFR
 scrape/text-vintage boundary — a change in how much detail PFR's own
 source recorded starting in 1999 — not a football rule change** (there was
@@ -219,7 +219,7 @@ trend line should note the 1999 boundary rather than reading it as smooth
 drift.
 
 **A secondary, smaller unexplained dip**, noted but not chased further per
-scope: sack and TFL values both dip noticeably in 2013-2015 (sack as low as
+scope: sack and run stuff values both dip noticeably in 2013-2015 (sack as low as
 1.456 in 2014, vs. ~1.7-1.9 in surrounding years) before recovering by
 2018. The dip is real (many SEs beyond noise) but its cause wasn't
 investigated — worth a look if a future pass revisits this era specifically.
@@ -237,7 +237,7 @@ genuinely low-value, non-turnover recoveries are almost certainly diluting
 the average downward. **Recommendation: before this FR number is used in
 the weight re-derivation, redo it with `parse_pfr_pbp.py`'s actual
 `RosterResolver` (team-based, not name-heuristic) to isolate true
-defensive takeaways.** INT, sack, and TFL don't have this problem — their
+defensive takeaways.** INT, sack, and run stuff don't have this problem — their
 regex matches are inherently defense-only.
 
 ## 7. Cross-validation against published estimates
@@ -273,14 +273,14 @@ other year required exclusion.
 ## 9. Bottom line for the weight re-derivation
 
 Real, directly-measured event values, ranked: **INT > FF > sack ≈ FR >
-TFL > PD > tackle**. The values are broadly stable across 1978-2025 — the
+run stuff > PD > tackle**. The values are broadly stable across 1978-2025 — the
 two specific hypotheses this doc was asked to test (recent kicking-range
 effect, early post-Blount-rule smoothing) both come back small-to-null,
 matching the user's own "probably very smooth" expectation — but the
 unhypothesized 1999 data-vintage boundary is real and should be respected
 in any downstream analysis that touches PD or the raw tackle-value trend.
 Note directly for whoever picks up doc 04's weight re-derivation: **pure
-event value ranks sack above TFL** (1.75 vs 1.10) here, the opposite
+event value ranks sack above run stuff** (1.75 vs 1.10) here, the opposite
 ordering from the user's skill-based DL-vs-LB argument in doc 04 — that's
 not a contradiction to resolve in this doc. Per this session's own
 wOBA/reliability framing, value and skill-attributability are separate

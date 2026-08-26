@@ -65,7 +65,7 @@ DL/technique-relevant.
 - **"LA Rams All-Time 3-4 Top Seasons" (2020)** — by role: ends — Youngblood
   1983-84 (~47 tkl/10 sacks avg), Dante Fowler 2019 (11.5 sacks); 3-technique — Aaron
   Donald 2017-19 (avg 15 sacks/9 stuffs/49 tkl/4 FF); **4i-technique — Reggie Doss**
-  1983-84 (66 tkl, 8 TFL, 8.5 sacks); nose — Alvin Wright 1988-90, Greg Meisner 1984.
+  1983-84 (66 tkl, 8 TFL (run stuff), 8.5 sacks); nose — Alvin Wright 1988-90, Greg Meisner 1984.
 - **"Where [a] Rams Defensive Tackle Ranks..." (2025)** — historical DT ranking:
   Donald 2014, Kobie Turner 2023, Braden Fiske 2024, Dick Huffman 1947, Olsen 1962,
   Larry Brooks 1972, Sean Gilbert 1992, Jim Winkler 1951, Frank Fuller 1953, Brockers

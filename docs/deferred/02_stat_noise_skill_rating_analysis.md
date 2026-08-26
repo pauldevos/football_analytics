@@ -7,7 +7,7 @@ memory of the conversation this was extracted from.
 ## The problem
 
 This session already ran a variance-decomposition (overdispersion, φ) test
-on five defensive stats — tackle, TFL, INT, FF, FR — to answer "how much of
+on five defensive stats — tackle, run stuff, INT, FF, FR — to answer "how much of
 this stat's variance across players is real skill vs. pure chance?" (See
 `docs/framework_decisions.md` §12/§14 for the original work, and
 `docs/deferred/04_idi_weight_revisit.md` for how those φ values currently
@@ -21,7 +21,7 @@ a Z-score-like distance metric. Concrete example given: defensive backs
 average around 3 INT/year, but Rod Woodson averaged 4.8/year — that gap,
 expressed as a standardized distance from the position-group mean, IS the
 skill rating. Do this for every stat this project has: **tackles, sacks,
-TFL, FF, FR, INT, PD** (pass deflections — not currently in IDI at all,
+run stuff, FF, FR, INT, PD** (pass deflections — not currently in IDI at all,
 worth including here as a candidate future component).
 
 **Why this matters beyond just satisfying curiosity**: this is meant to be
@@ -45,7 +45,7 @@ distributions. This analysis is upstream of that one.
    groups: `pass_rusher`, `run_stopper`, `coverage` — or finer if
    `docs/deferred/05_position_scheme_grouping_scoping.md` has landed and
    changed the grouping by the time this runs) for every stat: tackle,
-   sack, TFL, FF, FR, INT, PD.
+   sack, run stuff, FF, FR, INT, PD.
 
 2. **A per-player skill-distance rating**: for each player-season (or
    career, aggregated with the same shrinkage logic already used in
@@ -108,7 +108,7 @@ note.
 ## Context this depends on (read before starting)
 
 - `football_analytics/docs/framework_decisions.md` §12/§14 — the original
-  φ/dispersion methodology and results (tackle 4.87, TFL 2.69, INT 1.57,
+  φ/dispersion methodology and results (tackle 4.87, run stuff 2.69, INT 1.57,
   FF 1.32, FR 1.08) — this task extends that, doesn't replace it.
 - `football_analytics/dpvs/idi.py` — `_add_rate_component()`'s shrinkage
   machinery, directly reusable for the per-player skill-rating computation.
@@ -123,7 +123,7 @@ note.
 ## Known pitfalls
 
 - Don't repeat the naive-YoY-correlation mistake already caught once this
-  session for rare events (FF/FR/INT/TFL) — use the variance-decomposition/
+  session for rare events (FF/FR/INT/run stuff) — use the variance-decomposition/
   φ approach as the primary signal for anything low-count, per position
   group. This is explicitly why the original φ test exists.
 - PD (pass deflections) has a documented over-crediting risk elsewhere in
