@@ -107,7 +107,7 @@ def load_game_level(conn) -> pd.DataFrame:
         SELECT g.season AS season, pgs.player_id AS player_id, pgs.game_id AS game_id,
                pgs.franchise_id AS franchise_id,
                coalesce(pgs.position, pts.position) AS position,
-               pgs.comb_tackle AS comb_tackle, pgs.sack AS sack, pgs.tfl AS tfl,
+               pgs.comb_tackle AS comb_tackle, pgs.sack AS sack, pgs.run_stuff AS tfl,
                pgs.fr AS fr, pgs.def_int AS def_int, pgs.pd AS pd, pgs.ff AS ff,
                pgs.current_source AS current_source
         FROM gold.player_game_stats pgs

@@ -89,6 +89,25 @@ INSERT_COLS = (
 
 PARQUET_COL_MAP = {c: c for c in INSERT_COLS}  # 1:1 except franchise_id/player_id, resolved below
 
+# football_db 2026-08-26 Phase-5 run_stuff rename: gold.dpvs_g_player_season's
+# tfl_component_z/idi_tfl_source columns are now named run_stuff_component_z/
+# idi_run_stuff_source (see football_db/schema/migrations/
+# 20260826_run_stuff_rename_add_backfill.sql and
+# gamebooks_boxscores/docs/RUN_STUFFS_RENAME_PLAN.md SS7a). The upstream
+# parquet (built by build_dpvs_g.py from dpvs/idi.py/composite.py) still
+# names these columns tfl_component_z/idi_tfl_source -- renaming THAT is a
+# separate, larger Phase-6 football_analytics-internal identifier rename,
+# not part of this Postgres-schema migration. INSERT_COLS above stays the
+# parquet-facing (source) name list, used to validate/select from `df`;
+# this map is applied only when building the Postgres-facing (target)
+# column list for the INSERT statement itself, so the two naming schedules
+# stay decoupled exactly like ingest_gamebook_boxscores.py's markdown-
+# header-vs-Postgres-column split already does.
+PG_COL_RENAME = {
+    "tfl_component_z": "run_stuff_component_z",
+    "idi_tfl_source": "idi_run_stuff_source",
+}
+
 
 def load_pfr_id_cache(conn) -> dict[str, int]:
     cur = conn.cursor()
@@ -125,8 +144,9 @@ def main() -> None:
     cur = conn.cursor()
     cur.execute("TRUNCATE TABLE gold.dpvs_g_player_season")
 
-    placeholders = ", ".join(["%s"] * len(INSERT_COLS))
-    col_list = ", ".join(INSERT_COLS)
+    pg_cols = [PG_COL_RENAME.get(c, c) for c in INSERT_COLS]
+    placeholders = ", ".join(["%s"] * len(pg_cols))
+    col_list = ", ".join(pg_cols)
     sql = f"INSERT INTO gold.dpvs_g_player_season ({col_list}) VALUES ({placeholders})"
 
     rows = [tuple(r) for r in records.itertuples(index=False, name=None)]

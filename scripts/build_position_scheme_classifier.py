@@ -184,7 +184,7 @@ def load_game_rates(conn) -> pd.DataFrame:
         SELECT pgs.player_id, g.season,
                count(*) AS games,
                sum(pgs.sack) AS sacks,
-               sum(pgs.tfl) AS tfls
+               sum(pgs.run_stuff) AS tfls
         FROM gold.player_game_stats pgs
         JOIN gold.games g ON g.game_id = pgs.game_id
         GROUP BY 1, 2

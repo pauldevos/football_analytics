@@ -171,7 +171,7 @@ def load_season_stats(conn, player_ids: list[int]) -> pd.DataFrame:
     df = pd.read_sql("""
         SELECT pgs.player_id, g.season, pgs.franchise_id,
                coalesce(pgs.position, pts.position) AS position, pgs.current_source,
-               pgs.solo_tackle, pgs.ast_tackle, pgs.comb_tackle, pgs.sack, pgs.tfl,
+               pgs.solo_tackle, pgs.ast_tackle, pgs.comb_tackle, pgs.sack, pgs.run_stuff AS tfl,
                pgs.fr, pgs.def_int, pgs.pd, pgs.ff
         FROM gold.player_game_stats pgs
         JOIN gold.games g ON g.game_id = pgs.game_id

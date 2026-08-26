@@ -629,7 +629,7 @@ def load_gamebook_tfl_from_db() -> pd.DataFrame | None:
     try:
         df = pd.read_sql("""
             SELECT g.season AS season, gb.franchise_id AS franchise_id,
-                   p.full_name AS player, sum(gb.tfl) AS tfl_count, count(*) AS n_obs
+                   p.full_name AS player, sum(gb.run_stuff) AS tfl_count, count(*) AS n_obs
             FROM silver.player_game_stats_gamebook gb
             JOIN gold.games g ON g.game_id = gb.game_id
             JOIN gold.players p ON p.player_id = gb.player_id
@@ -684,7 +684,7 @@ def load_pfr_tfl_from_db() -> pd.DataFrame | None:
     try:
         df = pd.read_sql("""
             SELECT season, franchise_id, p.full_name AS player,
-                   sum(pfr.tfl) AS tfl_count, count(*) AS n_obs
+                   sum(pfr.run_stuff) AS tfl_count, count(*) AS n_obs
             FROM silver.player_game_stats_pfr pfr
             JOIN gold.players p ON p.player_id = pfr.player_id
             WHERE pfr.season BETWEEN 1978 AND 1998 AND pfr.game_type = 'regular'
@@ -743,7 +743,7 @@ def load_gold_stats_from_db(seasons: list[int]) -> pd.DataFrame | None:
                    sum(coalesce(pgs.comb_tackle, 0)) AS comb_tackles,
                    sum(coalesce(pgs.solo_tackle, 0)) AS solo,
                    sum(coalesce(pgs.ast_tackle, 0)) AS ast,
-                   sum(coalesce(pgs.tfl, 0)) AS tfl
+                   sum(coalesce(pgs.run_stuff, 0)) AS tfl
             FROM gold.player_game_stats pgs
             JOIN gold.games g ON g.game_id = pgs.game_id
             JOIN gold.players p ON p.player_id = pgs.player_id
