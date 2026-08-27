@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Build a completeness-ratio-gated TFL corpus for gamebooks_boxscores' 1967-1977
-season range, for use as IDI's TFL source in dpvs/idi.py.
+Build a completeness-ratio-gated run stuff corpus for gamebooks_boxscores' 1967-1977
+season range, for use as IDI's run stuff source in dpvs/idi.py.
 
-WHY THIS EXISTS: a prior rebuild of IDI's TFL component used raw
-games_observed as the denominator for a player's season tfl_share, which
-produced degenerate values for small samples (1 TFL in 1 observed game =
+WHY THIS EXISTS: a prior rebuild of IDI's run stuff component used raw
+games_observed as the denominator for a player's season run_stuff_share, which
+produced degenerate values for small samples (1 run stuff in 1 observed game =
 share 1.0). This script fixes that by reusing gamebooks_boxscores' own
 established completeness-ratio test (see that repo's
 build_defensive_leaderboards.py, which this script imports directly rather
 than re-deriving): team-side Solo+Ast / opponent(rush attempts + completions
 + times sacked) >= 0.70 qualifies a team-side's game for inclusion. Only
 games where the player's team-side cleared that bar are counted, both for
-the TFL numerator and the games_qualified denominator (n_obs) IDI's
+the run stuff numerator and the games_qualified denominator (n_obs) IDI's
 empirical-Bayes shrinkage needs.
 
 This covers all of 1967-1977 (build_defensive_leaderboards.py itself
@@ -20,13 +20,13 @@ defaults to 1967-1974 only; here we call its build() function directly for
 1976 and 1977 too, confirmed to resolve cleanly via the DB ratio in both
 seasons).
 
-Output: season, team, player, tfl_sum, games_qualified — one row per
-player-season with at least one qualifying game. tfl_sum/games_qualified
-is the qualifying-games TFL rate (NOT a share of team total — dpvs/idi.py
+Output: season, team, player, run_stuff_sum, games_qualified — one row per
+player-season with at least one qualifying game. run_stuff_sum/games_qualified
+is the qualifying-games run stuff rate (NOT a share of team total — dpvs/idi.py
 computes the share itself from these summed numerator/denominator pairs,
 same pattern as before).
 
-Usage: python3 build_tfl_gated_corpus.py
+Usage: python3 build_run_stuff_gated_corpus.py
     (needs football_db's .venv on PYTHONPATH — same requirement as
     gamebooks_boxscores/build_defensive_leaderboards.py itself)
 """
@@ -49,15 +49,15 @@ from roster_name_resolver import GamebookRosterCanonicalizer  # noqa: E402
 import json  # noqa: E402
 
 SEASONS = list(range(1967, 1978))  # 1967-1977 inclusive
-OUT_PATH = Path(__file__).resolve().parent.parent / "data_output" / "tfl_gamebooks_gated_1967_1977.csv"
+OUT_PATH = Path(__file__).resolve().parent.parent / "data_output" / "run_stuff_gamebooks_gated_1967_1977.csv"
 
 # franchise_id -> gold-parquet-compatible team code. See
 # build_tackle_gated_corpus.py's identical FID_TO_TEAM for the full
 # rationale (2026-08-21 bug fix, docs/framework_decisions.md §14):
 # gold.franchises.current_abbreviation (what this used to query) differs
 # from gold parquet's team_pfref for 12 of 28 franchises, so this corpus's
-# TFL numerator never matched onto dpvs/idi.py's merge for those
-# franchises at all -- silently zero TFL coverage for Willie Lanier/KC,
+# run stuff numerator never matched onto dpvs/idi.py's merge for those
+# franchises at all -- silently zero run stuff coverage for Willie Lanier/KC,
 # the Raiders, Rams, Cardinals, Colts, Packers, Saints, Patriots,
 # Oilers/Titans, Chargers, 49ers, and Buccaneers for the entire
 # 1967-1977 span, undetected until this pass's spot-checks.
@@ -146,7 +146,7 @@ def build(seasons: list[int]) -> pd.DataFrame:
             for rw in sec['rows']:
                 raw.append({
                     'season': season, 'fid': own_fid, 'name': rw['name'],
-                    'tfl': rw['run_stuff'], 'qualifies': qualifies,
+                    'run_stuff': rw['run_stuff'], 'qualifies': qualifies,
                 })
 
     print(f"  sides={total_sides} db_resolved={resolved_ct} qualifying={qual_ct}")
@@ -154,7 +154,7 @@ def build(seasons: list[int]) -> pd.DataFrame:
     # Canonical name merge: roster-based, not a text heuristic (2026-08-21
     # rewrite -- see roster_name_resolver.py's module docstring for why the
     # prior pure-text heuristic left real players fragmented, e.g. Jack
-    # Lambert's 1976 PIT TFL total split across "Jack Lambert"/"J. Lambert"/
+    # Lambert's 1976 PIT run stuff total split across "Jack Lambert"/"J. Lambert"/
     # "J.Lambert"/"Lambert" because "Jack Lambert" and any comma-order
     # variant both looked like distinct "full" names to that heuristic).
     #
@@ -195,7 +195,7 @@ def build(seasons: list[int]) -> pd.DataFrame:
 
     canonicalizer.print_stats()
 
-    tfl_sum = defaultdict(float)
+    run_stuff_sum = defaultdict(float)
     games_qual = defaultdict(int)
     for r in raw:
         if not r['qualifies']:
@@ -205,7 +205,7 @@ def build(seasons: list[int]) -> pd.DataFrame:
             continue
         name = canon.get(rkey, r['name'])
         key = (r['season'], r['fid'], name)
-        tfl_sum[key] += r['tfl']
+        run_stuff_sum[key] += r['run_stuff']
         games_qual[key] += 1
 
     rows = []
@@ -215,7 +215,7 @@ def build(seasons: list[int]) -> pd.DataFrame:
             'season': season,
             'team': fid_to_abbr.get(fid, '??').lower(),
             'player': name,
-            'tfl_sum': tfl_sum[key],
+            'run_stuff_sum': run_stuff_sum[key],
             'games_qualified': games_qual[key],
         })
     return pd.DataFrame(rows)

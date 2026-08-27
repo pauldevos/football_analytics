@@ -3,14 +3,13 @@
 Compute real average expected-points-value per defensive event type from PFR's
 pbp.csv (exp_pts_before/exp_pts_after columns), 1978-2025.
 
-Reuses the exact regex definitions from gamebooks_boxscores/parse_pfr_pbp.py
-(SACK_RE, TACKLE_RE, LOSS_TACKLE_RE, FF_RE, FR_RE, INT_RE, PD_RE,
-SPECIAL_TEAMS_RE) -- copied inline here rather than importing the module
-directly, because that module's own DB-backed player-resolution machinery
-(football_db.db.get_connection, RosterResolver) is not needed for this
-aggregate event-value analysis (no per-player attribution required, only
-per-play event-type classification). The regex patterns themselves are
-character-for-character identical to the source module.
+Imports the regex definitions (SACK_RE, TACKLE_RE, RUN_STUFF_RE, FF_RE, FR_RE,
+INT_RE, PD_RE, BLK_RE, SPECIAL_TEAMS_RE) directly from
+gamebooks_boxscores/parse_pfr_pbp.py rather than maintaining a second inline
+copy (2026-08-26, Phase 6 of the run_stuff rename -- see that import's own
+comment below for why the original "avoid this module's DB dependency"
+rationale for copying instead of importing no longer applies, now that the
+2026-08-22 FR-attribution fix already pulls in that module's RosterResolver).
 
 2026-08-22 FR-attribution fix (see docs/framework_decisions.md next section):
 the original FR_RE match ("recovered by X", X != the named fumbler) was a
@@ -61,21 +60,29 @@ ROOT = "/Users/devos/data/pfref/raw/boxscores"
 sys.path.insert(0, os.path.expanduser('~/github/football/football_db/src'))
 sys.path.insert(0, os.path.expanduser('~/github/football/gamebooks_boxscores'))
 from football_db.db import get_connection  # noqa: E402
-from parse_pfr_pbp import RosterResolver  # noqa: E402
+# 2026-08-26 (Phase 6 of the run_stuff rename, see
+# gamebooks_boxscores/docs/RUN_STUFFS_RENAME_PLAN.md SS3 point 1): these regex
+# constants used to be copied inline here character-for-character from
+# parse_pfr_pbp.py, with a note that the duplication was deliberate (avoiding
+# that module's DB-backed RosterResolver dependency, not needed for this
+# aggregate analysis). That justification no longer holds -- the 2026-08-22
+# FR-attribution fix below already imports RosterResolver from this same
+# module, so this script is no longer independent of it either way. Import
+# the real constants directly instead of maintaining a second copy that can
+# silently drift from the source of truth (confirmed real risk: this is
+# exactly the regex that implements the non-sack "run_stuff" convention this
+# whole rename project is about).
+from parse_pfr_pbp import (  # noqa: E402
+    RosterResolver, NAME, TACKLE_RE, SACK_RE, RUN_STUFF_RE, FF_RE, FR_RE,
+    INT_RE, PD_RE, BLK_RE, SPECIAL_TEAMS_RE,
+)
 
-NAME = r"[A-Za-z.\'\-]+(?: [A-Za-z.\'\-]+)*?"
-TACKLE_RE = re.compile(rf'\(tackle by ({NAME})(?: and ({NAME}))? ?\)')
-SACK_RE = re.compile(rf'sacked by ({NAME})(?: and ({NAME}))? for (-?\d+) yards?')
-LOSS_TACKLE_RE = re.compile(rf'for (-\d+) yards? \(tackle by ({NAME})(?: and ({NAME}))? ?\)')
-FF_RE = re.compile(rf'forced by ({NAME}) ?\)')
-FR_RE = re.compile(rf'recovered by ({NAME})(?: at | and |\.|,|$)')
-INT_RE = re.compile(rf'intercepted by ({NAME})(?: at | and |\.|,|$)')
-PD_RE = re.compile(rf'defended by ({NAME}) ?\)')
-BLK_RE = re.compile(rf'blocked by ({NAME})')
-SPECIAL_TEAMS_RE = re.compile(r'kicks off|punts|field goal|extra point|point after', re.I)
+# Not part of parse_pfr_pbp.py's own scoring vocabulary -- used only by this
+# script's own 2026-08-22 FR-attribution fix (see module docstring), so it
+# stays a local definition rather than an import.
 FUMBLER_RE = re.compile(rf'({NAME}) fumbles')
 
-CATS = ["int", "sack", "tfl", "fr", "tackle"]
+CATS = ["int", "sack", "run_stuff", "fr", "tackle"]
 BONUS = ["pd", "ff"]
 
 # per-season, per-category: n, sum, sumsq
@@ -137,9 +144,9 @@ for year in years:
                     is_kick = bool(SPECIAL_TEAMS_RE.search(detail))
                     int_m = INT_RE.search(detail)
                     sack_m = SACK_RE.search(detail)
-                    tfl_m = None
+                    run_stuff_m = None
                     if not is_kick and not sack_m:
-                        tfl_m = LOSS_TACKLE_RE.search(detail)
+                        run_stuff_m = RUN_STUFF_RE.search(detail)
                     fr_m = None
                     fum_m = FUMBLER_RE.search(detail)
                     if fum_m:
@@ -163,15 +170,15 @@ for year in years:
                             else:
                                 fr_stats["unresolved_one_or_both"] += 1
                     tackle_m = None
-                    if not int_m and not sack_m and not tfl_m:
+                    if not int_m and not sack_m and not run_stuff_m:
                         tackle_m = TACKLE_RE.search(detail)
 
                     if int_m:
                         cat = "int"
                     elif sack_m:
                         cat = "sack"
-                    elif tfl_m:
-                        cat = "tfl"
+                    elif run_stuff_m:
+                        cat = "run_stuff"
                     elif fr_m:
                         cat = "fr"
                     elif tackle_m:

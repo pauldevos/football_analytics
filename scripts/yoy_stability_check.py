@@ -41,9 +41,9 @@ print(f"IDI_z pooled YoY Pearson r:                {r_idi:.3f}")
 print(f"Composite (no-WOWY) pooled YoY Pearson r:  {r_comp:.3f}")
 
 print("\n— by era —")
-for lo, hi, label in [(1967, 1977, "1967-1977 (gamebooks TFL)"),
-                       (1978, 1998, "1978-1998 (pbp TFL, undercount)"),
-                       (1999, 2024, "1999-2024 (gold TFL)")]:
+for lo, hi, label in [(1967, 1977, "1967-1977 (gamebooks run stuff)"),
+                       (1978, 1998, "1978-1998 (pbp run stuff, undercount)"),
+                       (1999, 2024, "1999-2024 (gold run stuff)")]:
     sub = pairs[(pairs["season"] >= lo) & (pairs["season"] <= hi)]
     if sub.empty:
         continue

@@ -4,7 +4,7 @@ Build the tackle opportunity-ratio normalization table for IDI's pre-2001
 tackle_share fix (dpvs/idi.py) -- see docs/framework_decisions.md, the
 section documenting this 2026-08-22 change, for the full motivation.
 
-WHY THIS EXISTS: unlike sacks/INT/TFL (official, well-scored stats), season
+WHY THIS EXISTS: unlike sacks/INT/run stuff (official, well-scored stats), season
 tackle TOTALS are prone to real, confirmed inflation by some team scoring
 staffs/media guides -- the flagship case: Randy Gradishar's 1978 media
 guide credits him with 286 solo tackles in 14/16 games, an implausible
@@ -97,7 +97,7 @@ by the two ratios drifting differently over time):
      table directly; the per-player blend (solo_share * adj_expected_solos
      + ast_share * adj_expected_ast, normalized into a share) happens
      there, not here, per this project's standing prep-script/loader-
-     function split (see build_tfl_gated_corpus.py / build_tackle_gated_
+     function split (see build_run_stuff_gated_corpus.py / build_tackle_gated_
      corpus.py for the established pattern this mirrors).
 
 Output:

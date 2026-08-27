@@ -65,7 +65,7 @@ distributions. This analysis is upstream of that one.
    games/team-sides that clear the established ≥70% completeness-ratio gate**
    — this project's existing convention (see `gamebooks_boxscores`'
    `build_defensive_leaderboards.py` and this repo's own
-   `build_tfl_gated_corpus.py`/`build_tackle_gated_corpus.py` for exactly
+   `build_run_stuff_gated_corpus.py`/`build_tackle_gated_corpus.py` for exactly
    how that gate is computed; reuse it directly, don't re-derive). Do not
    include ungated 1967-77 data in this analysis — it would bias the
    "how noisy is this stat" measurement with artificially sparse/incomplete

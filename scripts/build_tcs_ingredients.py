@@ -205,16 +205,16 @@ def load_season_tackle_counts(seasons: list[int]) -> pd.DataFrame:
     eras with no reliable per-game tackle column (1967-1998) -- reuses
     dpvs/idi.py's already-validated 1967-1977 loader directly
     (load_gamebook_tackle_gated(), the same >=70%-completeness-gated corpus
-    IDI itself is built from) and mirrors its own load_pbp_tfl() pattern for
+    IDI itself is built from) and mirrors its own load_pbp_run_stuff() pattern for
     1978-1998 (no ready-made tackle-count loader exists in idi.py -- only
-    TFL -- so this is built here directly from the same source CSV's
+    run stuff -- so this is built here directly from the same source CSV's
     'tackles' column, same season/game_type/groupby convention as
-    load_pbp_tfl()). 1999+ isn't needed here (real per-game tackles_combined
+    load_pbp_run_stuff()). 1999+ isn't needed here (real per-game tackles_combined
     already used directly -- see build_game_defense.py docstring on the
     per-game data cutover).
 
     Name-matching (lowercased, stripped player name within season+team) is
-    the SAME convention idi.py's own tackle_share/TFL merges use -- not a
+    the SAME convention idi.py's own tackle_share/run stuff merges use -- not a
     new risk introduced here.
 
     Returns: season, team, player_name_key, season_tackle_count.

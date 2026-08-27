@@ -4,7 +4,7 @@ Per-position, per-stat noise/skill-rating analysis (docs/deferred/
 02_stat_noise_skill_rating_analysis.md).
 
 Extends the single pooled overdispersion (phi) test from
-docs/framework_decisions.md Sec12/Sec14 (tackle 4.87, TFL 2.69, INT 1.57,
+docs/framework_decisions.md Sec12/Sec14 (tackle 4.87, run stuff 2.69, INT 1.57,
 FF 1.32, FR 1.08 -- pooled across all positions) into a per-position_group
 breakdown, adds split-half career reliability and YoY Pearson-r as secondary
 signals, computes a per-player z-score "skill distance" from the
@@ -16,7 +16,7 @@ PFR 1978-2025 + gamebooks 1967-1977), gated for the 1967-1977 gamebook
 portion by silver.player_game_stats_gamebook.completeness_qualified (the
 project's established >=70% completeness-ratio gate -- see
 gamebooks_boxscores/build_defensive_leaderboards.py and
-football_analytics/scripts/build_tfl_gated_corpus.py /
+football_analytics/scripts/build_run_stuff_gated_corpus.py /
 build_tackle_gated_corpus.py for how that gate itself is computed; this
 script does not re-derive it, only reads the pre-computed boolean column).
 
@@ -72,7 +72,7 @@ def map_position(pos) -> str:
 STATS = {
     "tackle": "tackle",
     "sack": "sack",
-    "tfl": "tfl",
+    "run_stuff": "run_stuff",
     "fr": "fr",
     "int": "int",
     "pd": "pd",
@@ -107,7 +107,7 @@ def load_game_level(conn) -> pd.DataFrame:
         SELECT g.season AS season, pgs.player_id AS player_id, pgs.game_id AS game_id,
                pgs.franchise_id AS franchise_id,
                coalesce(pgs.position, pts.position) AS position,
-               pgs.comb_tackle AS comb_tackle, pgs.sack AS sack, pgs.run_stuff AS tfl,
+               pgs.comb_tackle AS comb_tackle, pgs.sack AS sack, pgs.run_stuff,
                pgs.fr AS fr, pgs.def_int AS def_int, pgs.pd AS pd, pgs.ff AS ff,
                pgs.current_source AS current_source
         FROM gold.player_game_stats pgs
@@ -121,7 +121,7 @@ def load_game_level(conn) -> pd.DataFrame:
            OR (pgs.current_source = 'gamebook' AND gb.completeness_qualified = true)
     """
     df = pd.read_sql(q, conn)
-    for c in ["comb_tackle", "sack", "tfl", "fr", "def_int", "pd", "ff"]:
+    for c in ["comb_tackle", "sack", "run_stuff", "fr", "def_int", "pd", "ff"]:
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0.0)
     return df
 
@@ -155,7 +155,7 @@ def build_season_frame(game_df: pd.DataFrame) -> pd.DataFrame:
     )
     agg = game_df.groupby(["player_id", "season"]).agg(
         games=("game_id", "nunique"),
-        tackle=("comb_tackle", "sum"), sack=("sack", "sum"), tfl=("tfl", "sum"),
+        tackle=("comb_tackle", "sum"), sack=("sack", "sum"), run_stuff=("run_stuff", "sum"),
         fr=("fr", "sum"), int=("def_int", "sum"), pd=("pd", "sum"), ff=("ff", "sum"),
     ).reset_index()
     agg = agg.merge(pos_mode.rename("position").reset_index(), on=["player_id", "season"], how="left")

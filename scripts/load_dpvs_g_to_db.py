@@ -67,7 +67,7 @@ INSERT_COLS = (
     # dpvs/idi.py's module docstring). fr_share (below) stays unused/NULL,
     # same reasoning as sack_share's removal -- no un-standardized raw
     # share exists for a rate+shrinkage+volume composite.
-    "tackle_share_z", "tfl_component_z", "sack_component_z", "int_component_z", "ff_component_z",
+    "tackle_share_z", "run_stuff_component_z", "sack_component_z", "int_component_z", "ff_component_z",
     "fr_component_z",
     "tackle_share",
     # int_share/ff_share/fr_share REMOVED 2026-08-22: found, while wiring up
@@ -83,7 +83,7 @@ INSERT_COLS = (
     # reads them from gold.dpvs_g_player_season, and the schema columns stay
     # in place (unused, always NULL going forward) rather than requiring a
     # DB migration for an unrelated pre-existing gap.
-    "idi_tackle_source", "idi_tfl_source", "tackle_source", "data_confidence",
+    "idi_tackle_source", "idi_run_stuff_source", "tackle_source", "data_confidence",
     "season_pos_rank", "season_overall_rank",
 )
 
@@ -93,20 +93,16 @@ PARQUET_COL_MAP = {c: c for c in INSERT_COLS}  # 1:1 except franchise_id/player_
 # tfl_component_z/idi_tfl_source columns are now named run_stuff_component_z/
 # idi_run_stuff_source (see football_db/schema/migrations/
 # 20260826_run_stuff_rename_add_backfill.sql and
-# gamebooks_boxscores/docs/RUN_STUFFS_RENAME_PLAN.md SS7a). The upstream
-# parquet (built by build_dpvs_g.py from dpvs/idi.py/composite.py) still
-# names these columns tfl_component_z/idi_tfl_source -- renaming THAT is a
-# separate, larger Phase-6 football_analytics-internal identifier rename,
-# not part of this Postgres-schema migration. INSERT_COLS above stays the
-# parquet-facing (source) name list, used to validate/select from `df`;
-# this map is applied only when building the Postgres-facing (target)
-# column list for the INSERT statement itself, so the two naming schedules
-# stay decoupled exactly like ingest_gamebook_boxscores.py's markdown-
-# header-vs-Postgres-column split already does.
-PG_COL_RENAME = {
-    "tfl_component_z": "run_stuff_component_z",
-    "idi_tfl_source": "idi_run_stuff_source",
-}
+# gamebooks_boxscores/docs/RUN_STUFFS_RENAME_PLAN.md SS7a). Phase 6 (this
+# session) renamed the upstream parquet-producing side to match
+# (dpvs/idi.py's compute_idi() now emits run_stuff_component_z/
+# idi_run_stuff_source directly -- see that module), so INSERT_COLS above
+# already lists the current parquet column names and no source->target
+# rename map is needed here anymore. Kept as a no-op passthrough (rather
+# than removed outright) in case a future naming divergence between the
+# parquet and Postgres sides reappears -- see PG_COL_RENAME's one call site
+# below.
+PG_COL_RENAME: dict[str, str] = {}
 
 
 def load_pfr_id_cache(conn) -> dict[str, int]:

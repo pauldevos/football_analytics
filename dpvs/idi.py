@@ -3,31 +3,31 @@ Individual Disruption Index (IDI) — Layer 2 of DPVS-G.
 
 IDI measures a player's individual defensive disruption relative to the
 WHOLE LEAGUE each season (2026-08-22 §20: no longer position-relative —
-see below), across six components: tackle share, TFL, sack, INT, FF, FR.
+see below), across six components: tackle share, run stuff, sack, INT, FF, FR.
 
-2026-08-21 reweight (TFL added, FR dropped — see docs/framework_decisions.md
+2026-08-21 reweight (run stuff added, FR dropped — see docs/framework_decisions.md
 §11 for the full YoY-stability evidence trail that motivated this).
 
 2026-08-21 refinement (this pass — see docs/framework_decisions.md §12):
-the first TFL/FR reweight attempt (§11) regressed pooled YoY stability
+the first run stuff/FR reweight attempt (§11) regressed pooled YoY stability
 (IDI_z 0.386 → 0.343) for two diagnosed reasons: (1) the 1967-1977 gamebooks
-TFL share was computed from tiny observed-game samples with no floor, so a
-player with 1 TFL in 1 observed game showed tfl_share = 1.0; (2) tfl_share
+run stuff share was computed from tiny observed-game samples with no floor, so a
+player with 1 run stuff in 1 observed game showed run_stuff_share = 1.0; (2) run_stuff_share
 and the other rare-event components were *shares of team season total* —
-a noisier statistic than a per-game rate, because team TFL/INT/FF totals
+a noisier statistic than a per-game rate, because team run stuff/INT/FF totals
 are themselves small, rare-event counts. This pass replaces the share-based
 treatment of the three rare-event components with three fixes applied
 together:
 
-  1. TFL sourcing now spans three eras, all as RAW counts + observed games
+  1. Run stuff sourcing now spans three eras, all as RAW counts + observed games
      (n_obs), not shares:
        - 1967-1977: gamebooks_boxscores' 28-team corpus, but ONLY from
          game-sides that cleared that corpus's own completeness-ratio test
          (team Solo+Ast / opponent snaps >= 70%, gated at build time in
-         scripts/build_tfl_gated_corpus.py — reuses gamebooks_boxscores'
+         scripts/build_run_stuff_gated_corpus.py — reuses gamebooks_boxscores'
          own build_defensive_leaderboards.py ratio code directly rather
          than re-deriving it) AND that have >= MIN_GAMES_QUALIFIED_FLOOR
-         qualifying games observed. Below the floor, TFL is simply
+         qualifying games observed. Below the floor, run stuff is simply
          unavailable for that player-season (falls through the gating
          mechanism below) rather than forced from a 1-2-game sample.
        - 1978-1998: NEWLY WIRED IN this pass. gamebooks_boxscores'
@@ -39,10 +39,10 @@ together:
          but every row sourced from it carries the
          "pfr_pbp_undercount_1978_1998" tier tag so it's never silently
          treated as equal-confidence to the other two eras.
-       - 1999+: gold parquet's own real PFR 'tfl' column, unchanged.
+       - 1999+: gold parquet's own real PFR 'run_stuff' column, unchanged.
 
   2. Empirical-Bayes shrinkage on the per-game RATE (not share) for all
-     three rare-event components (TFL, INT, FF):
+     three rare-event components (run stuff, INT, FF):
        shrunk_rate = (n_obs·observed_rate + k·prior_rate) / (n_obs + k)
      prior_rate is the player's own career rate as of the prior season
      (pfr_player_id-keyed cumulative count/games over STRICTLY EARLIER
@@ -64,7 +64,7 @@ together:
      that ask, and nothing measured this session argues for skewing it.
 
   4. SCALE CONSISTENCY (a judgment call worth flagging explicitly): once
-     TFL/INT/FF become z-scored composites (component_z, ~N(0,1)) rather
+     run stuff/INT/FF become z-scored composites (component_z, ~N(0,1)) rather
      than shares (~0.0-0.3), blending them into one weighted sum alongside
      RAW tackle_share/sack_share would let the z-scored components dominate
      numerically before the weights even apply — a scale-mismatch bug, not
@@ -90,12 +90,12 @@ together:
   event VALUE (expected-points swing to the defense, from PFR's own
   exp_pts_before/exp_pts_after, 1978-2025 — see
   docs/deferred/04_event_value_results_20260822.md), proportional for the
-  four genuine disruption events (TFL/sack/INT/FF), with tackle handled as
+  four genuine disruption events (run stuff/sack/INT/FF), with tackle handled as
   a separate small fixed participation weight rather than value-proportional
   (its own measured value is NEGATIVE, -0.36 EP — a "routine" tackle
   follows a play the offense already gained on, by construction; see the
   _W_BASE definition below for the full reasoning):
-    IDI = 0.10·tackle_share_z + 0.113·tfl_component_z + 0.179·sack_component_z
+    IDI = 0.10·tackle_share_z + 0.113·run_stuff_component_z + 0.179·sack_component_z
           + 0.367·int_component_z + 0.242·ff_component_z
 
   sack_share_z REMOVED 2026-08-22, replaced with sack_component_z (this is
@@ -108,20 +108,20 @@ together:
   project's confirmed media-guide-style inflation problem (they're an
   official, honestly-scored stat), so a raw count is trustworthy as-is.
   sack_component_z gets the exact same rate+shrinkage+volume treatment
-  (_add_rate_component) as TFL/INT/FF, using sack's own measured
+  (_add_rate_component) as run stuff/INT/FF, using sack's own measured
   phi=2.126 (k≈7.10) — previously it was the only one of the five still
   computed as a raw team-share z-score; that team-share computation
   (`sack_share`, `team_sk`) is now removed entirely, not just
   superseded — no code path in this file computes a sack team-share
   anymore.
 
-  tackle_share_z and tfl_component_z remain independently gated per
+  tackle_share_z and run_stuff_component_z remain independently gated per
   player-season (may be unavailable); sack_component_z / int_component_z /
   ff_component_z are treated as always-computable (gold parquet covers
   1960+ for sack/int/ff) and default to a neutral 0.0 z when a row is
   missing from gold parquet entirely — the same fallback semantics the
   pre-2026-08-21 code used for these three, just on the new scale.
-  Whichever of {tackle_share_z, tfl_component_z} are actually unavailable
+  Whichever of {tackle_share_z, run_stuff_component_z} are actually unavailable
   for a row get dropped from the weight dict and the rest renormalize
   proportionally (see _idi_row / _GATED_COMPONENTS).
 
@@ -165,7 +165,7 @@ RE-PICKED from user-given ranges (not event value or phi this time). User's
 own words, verbatim, the direct trigger: "There shouldn't be ANY z-score by
 position at all for these stats. 18 sacks is better than 12 sacks, end of
 story, I don't care if it's the Kicker getting the sacks. We do care about
-the event value though, again, Sacks, TFL, Tackles in order." Motivating
+the event value though, again, Sacks, run stuff, Tackles in order." Motivating
 bug: Donnie Shell (S, PIT 1978) drew sack_component_z=4.0 (the winsorized
 max) because the "coverage" position group's sack-rate population variance
 is tiny (safeties almost never sack the QB) -- his one rare sack looked
@@ -193,7 +193,7 @@ not because the event itself was extraordinary league-wide.
      reason for dropping it (phi=1.08, closest of any component to the
      pure-chance floor -- almost no repeatable individual skill) still
      stands and is handled correctly this time: FR gets the same
-     rate+shrinkage+volume treatment as TFL/INT/FF/sack
+     rate+shrinkage+volume treatment as run stuff/INT/FF/sack
      (_add_rate_component), with k≈100.0 (extreme shrinkage, by far the
      largest k of any component) so a player's FR component leans almost
      entirely on the population/career prior rather than one season's
@@ -203,7 +203,7 @@ not because the event itself was extraordinary league-wide.
      (explicitly a starting point for further tuning, not a final
      answer) -- see the `_W_BASE` comment in this file for the exact
      reasoning behind each choice within its range:
-       Sack 0.30, TFL 0.25, Tackle 0.20, FF 0.125, INT 0.12, FR 0.12
+       Sack 0.30, run stuff 0.25, Tackle 0.20, FF 0.125, INT 0.12, FR 0.12
        (sum 1.115) -> normalized ÷1.115 -> 0.269 / 0.224 / 0.179 / 0.112 /
        0.108 / 0.108. This REPLACES §18's event-value-derived weights
        (0.10/0.113/0.179/0.367/0.242) entirely -- value-per-event is no
@@ -228,28 +228,28 @@ from .positions import map_position
 GAMEBOOK_BASE  = Path.home() / "data/gamebooks_processed/teams"
 GOLD_PARQUET   = Path.home() / "data/gold/player_season_card.parquet"
 
-# 1967-1977 TFL, gated at build time by gamebooks_boxscores' own >=70%
-# completeness-ratio test (see scripts/build_tfl_gated_corpus.py's docstring
+# 1967-1977 run stuff, gated at build time by gamebooks_boxscores' own >=70%
+# completeness-ratio test (see scripts/build_run_stuff_gated_corpus.py's docstring
 # for exactly how — it imports and reuses that repo's own ratio code rather
-# than re-deriving the formula). Columns: season, team, player, tfl_sum,
+# than re-deriving the formula). Columns: season, team, player, run_stuff_sum,
 # games_qualified. NOT pre-floored by games_qualified — this file applies
 # MIN_GAMES_QUALIFIED_FLOOR at load time.
-GAMEBOOK_TFL_GATED_CORPUS = (
+GAMEBOOK_RUN_STUFF_GATED_CORPUS = (
     Path(__file__).resolve().parent.parent
-    / "data_output" / "tfl_gamebooks_gated_1967_1977.csv"
+    / "data_output" / "run_stuff_gamebooks_gated_1967_1977.csv"
 )
 
-# 1978-1998 TFL, PFR pbp.csv-derived — the ONLY source for this era, but a
+# 1978-1998 run stuff, PFR pbp.csv-derived — the ONLY source for this era, but a
 # confirmed undercount (see module docstring point 1). Columns include
-# season, game_type, franchise_id, player, games, tfl, ...
-PBP_TFL_CORPUS = (
+# season, game_type, franchise_id, player, games, run_stuff, ...
+PBP_RUN_STUFF_CORPUS = (
     Path.home() / "github/football/gamebooks_boxscores/outputs"
     / "pfr_pbp_defensive_stats_1978_2025.csv"
 )
 
 # 1967-1977 tackle_share source (2026-08-21, see docs/framework_decisions.md
 # §14): gamebooks_boxscores' completeness-ratio-gated corpus, direct
-# structural mirror of GAMEBOOK_TFL_GATED_CORPUS above — same >=70% ratio
+# structural mirror of GAMEBOOK_RUN_STUFF_GATED_CORPUS above — same >=70% ratio
 # gate, same roster-based name canonicalization, built by
 # scripts/build_tackle_gated_corpus.py. Replaces the dead
 # ~/data/gamebooks_processed/teams/ read (GAMEBOOK_BASE below) for this era
@@ -275,7 +275,7 @@ TACKLE_OPPORTUNITY_ADJ_CORPUS = (
     / "data_output" / "tackle_opportunity_adjusted_1967_2000.csv"
 )
 
-# franchise_id -> pgd team code, for PBP_TFL_CORPUS's franchise_id column.
+# franchise_id -> pgd team code, for PBP_RUN_STUFF_CORPUS's franchise_id column.
 # Primary (non-alias) entries copied from gamebooks_boxscores'
 # build_defensive_leaderboards.py ABBR_TO_FID, inverted — same franchise
 # identity convention this file already uses everywhere else (_GOLD_TO_PGD,
@@ -303,10 +303,10 @@ _FID_TO_TEAM: dict[int, str] = {
 # ── empirical-Bayes shrinkage / gating constants (2026-08-21, see module
 #    docstring point 2 and docs/framework_decisions.md §12) ─────────────────
 
-# Floor before a 1967-1977 gamebooks-era player-season's TFL is trusted at
+# Floor before a 1967-1977 gamebooks-era player-season's run stuff is trusted at
 # all (point 2 of this rebuild's brief: "at least 4-6 games" — 4 chosen as
 # the floor, not the target, since it already fully eliminates the
-# degenerate 1-game/1-TFL=100%-rate cases found in this corpus).
+# degenerate 1-game/1-run stuff=100%-rate cases found in this corpus).
 MIN_GAMES_QUALIFIED_FLOOR = 4
 
 # Floor of prior-season games before a player's OWN career rate is trusted
@@ -318,7 +318,7 @@ MIN_CAREER_OBS_FLOOR = 8.0
 
 # k derivation: this session's variance-decomposition found overdispersion
 # phi (ratio of observed variance to pure-chance/Poisson variance) of 2.69
-# (TFL), 1.57 (INT), 1.32 (FF) — TFL is the most reliable, individual-skill-
+# (run stuff), 1.57 (INT), 1.32 (FF) — run stuff is the most reliable, individual-skill-
 # driven signal of the three, FF the least (closest to pure chance, same
 # reasoning that got FR dropped entirely). phi-1 is the "signal over the
 # pure-chance floor of 1.0", so k (how many prior-weighted pseudo-games it
@@ -327,31 +327,31 @@ MIN_CAREER_OBS_FLOOR = 8.0
 # roughly half an NFL season — chosen as the scale at which a "moderate"
 # amount of same-season evidence should already compete with the prior;
 # nothing measured this session pins down the absolute scale, only the
-# relative ordering (TFL shrinks least, FF shrinks most), so K0 is a
+# relative ordering (run stuff shrinks least, FF shrinks most), so K0 is a
 # judgment call, not a fitted value.
 # "tackle" phi added 2026-08-21 (§14): same method-of-moments quasi-Poisson
 # dispersion estimate (season-pooled population rate as mu, Pearson
 # chi-square / (N-1)), computed in scripts/build_tackle_gated_corpus.py's
 # main() over the 7,262-row gated tackle corpus -> phi=4.872. Higher than
-# TFL's 2.69, i.e. under this same framework tackle counts carry even more
-# individual-skill signal relative to pure chance than TFL does (intuitive:
+# run stuff's 2.69, i.e. under this same framework tackle counts carry even more
+# individual-skill signal relative to pure chance than run stuff does (intuitive:
 # tackle counts have far more observations per game than a rare event like
-# TFL/sack/INT, so less of the season total is noise) -> tackle gets the
+# run stuff/sack/INT, so less of the season total is noise) -> tackle gets the
 # LEAST shrinkage of the four rate components.
 #
 # "sack" phi added 2026-08-22 (see docs/framework_decisions.md next section
 # after §17 -- the IDI weight-revisit / event-value pass): sack never got
 # this treatment before (it was still a raw team-share z-score, unlike
-# TFL/INT/FF). Computed with the SAME method as the numbers above --
+# run stuff/INT/FF). Computed with the SAME method as the numbers above --
 # season-pooled population rate as mu, Pearson chi-square/(N-n_seasons),
-# UNFLOORED, all positions pooled (matching how TFL/INT/FF's own pooled
+# UNFLOORED, all positions pooled (matching how run stuff/INT/FF's own pooled
 # phis were computed, confirmed by reproducing tackle's 4.872 exactly with
 # this method restricted to its own gated corpus) -- over the full
 # football_db gold.player_game_stats-derived frame (65,282 player-seasons,
 # 1967-2025, >=70%-completeness-gated for the 1967-1977 portion, same gate
 # scripts/stat_noise_skill_rating_analysis.py's load_game_level() already
 # applies): phi_sack = 2.126. This sits between FF/INT (near-chance) and
-# TFL (2.69) -- real, moderate signal, consistent with
+# run stuff (2.69) -- real, moderate signal, consistent with
 # docs/deferred/02_RESULTS_stat_noise_skill_rating_analysis.md's
 # position-split finding (sack phi 1.85-1.90 for the two pass-rushing
 # groups, 1.16 for coverage -- "moderate... clearly below tackle," matching
@@ -371,12 +371,12 @@ MIN_CAREER_OBS_FLOOR = 8.0
 # far above any other stat's k) so a player's FR component is overwhelmingly
 # pulled toward the population/career prior rather than any single season's
 # recovery luck, while still getting the same rate+shrinkage+volume
-# treatment (_add_rate_component) as TFL/INT/FF/sack -- not a flat
+# treatment (_add_rate_component) as run stuff/INT/FF/sack -- not a flat
 # unadjusted count, per the user's own instruction.
-_PHI: dict[str, float] = {"tfl": 2.69, "int": 1.57, "ff": 1.32, "tackle": 4.872, "sack": 2.126, "fr": 1.08}
+_PHI: dict[str, float] = {"run_stuff": 2.69, "int": 1.57, "ff": 1.32, "tackle": 4.872, "sack": 2.126, "fr": 1.08}
 _K0 = 8.0
 _K: dict[str, float] = {stat: _K0 / (phi - 1.0) for stat, phi in _PHI.items()}
-# -> tfl≈4.73, int≈14.04, ff≈25.00, tackle≈2.07, sack≈7.10, fr≈100.00
+# -> run_stuff≈4.73, int≈14.04, ff≈25.00, tackle≈2.07, sack≈7.10, fr≈100.00
 
 ZSCORE_WINSOR = 4.0  # matches dpvs/composite.py's winsorization convention
 
@@ -450,7 +450,7 @@ _GAMEBOOK_TEAMS: dict[str, tuple[int, int]] = {
 # user's own explicit, direct instruction: "There shouldn't be ANY z-score
 # by position at all for these stats. 18 sacks is better than 12 sacks, end
 # of story, I don't care if it's the Kicker getting the sacks. We do care
-# about the event value though, again, Sacks, TFL, Tackles in order." Two
+# about the event value though, again, Sacks, run stuff, Tackles in order." Two
 # separate changes bundled into one pass:
 #
 #   1. Every one of these five components' z-scoring moved from
@@ -486,10 +486,10 @@ _GAMEBOOK_TEAMS: dict[str, tuple[int, int]] = {
 #      tuning, not a final answer):
 #        Sacks:   0.25-0.40  -> chose 0.30 (mid-low: the ceiling would let
 #                 sacks alone dominate every other component combined)
-#        TFL:     0.20-0.35  -> chose 0.25 (midpoint)
+#        run stuff:     0.20-0.35  -> chose 0.25 (midpoint)
 #        Tackles: 0.15-0.25  -> chose 0.20 (upper end -- reflects "Tackles"
 #                 still being named third in the user's explicit value
-#                 ordering "Sacks, TFL, Tackles," not merely a participation
+#                 ordering "Sacks, run stuff, Tackles," not merely a participation
 #                 signal the way §18's fixed 0.10 treated it)
 #        FF:      0.10-0.15  -> chose 0.125 (midpoint)
 #        INT:     0.12 (fixed by the user)
@@ -502,7 +502,7 @@ _GAMEBOOK_TEAMS: dict[str, tuple[int, int]] = {
 #      1.000 while preserving the chosen ratios exactly:
 _W_BASE = {
     "tackle_share_z":   0.179,   # 0.20   / 1.115
-    "tfl_component_z":  0.224,   # 0.25   / 1.115
+    "run_stuff_component_z":  0.224,   # 0.25   / 1.115
     "sack_component_z": 0.269,   # 0.30   / 1.115 (rate+shrinkage-treated, see _add_rate_component call below)
     "int_component_z":  0.108,   # 0.12   / 1.115
     "ff_component_z":   0.112,   # 0.125  / 1.115
@@ -514,7 +514,7 @@ _W_BASE = {
 # sack_component_z/int_component_z/ff_component_z/fr_component_z are always
 # treated as computable (default to a neutral 0.0 z via _safe() when
 # genuinely absent) since gold parquet covers them back to 1960.
-_GATED_COMPONENTS = ("tackle_share_z", "tfl_component_z")
+_GATED_COMPONENTS = ("tackle_share_z", "run_stuff_component_z")
 
 
 # ── gamebook tackle-share loader (unchanged from prior session) ─────────────
@@ -522,7 +522,7 @@ _GATED_COMPONENTS = ("tackle_share_z", "tfl_component_z")
 def _load_gamebook_season(team: str, season: int) -> pd.DataFrame | None:
     """
     Load ~/data/gamebooks_processed/teams/{team}/seasons/{season}_defense.csv.
-    Columns: player, pos, games, solo, asst, tkl, sack, tfl, fr, int_, pd, tkl_pct
+    Columns: player, pos, games, solo, asst, tkl, sack, run_stuff, fr, int_, pd, tkl_pct
     Returns None if file not found.
     """
     path = GAMEBOOK_BASE / team / "seasons" / f"{season}_defense.csv"
@@ -562,16 +562,16 @@ def load_all_gamebook_idi(
 # football_db now has real per-game data behind three of this file's four
 # file-based loaders: silver.player_game_stats_gamebook was reloaded this
 # session with the same roster-based name resolver + completeness-ratio gate
-# GAMEBOOK_TFL_GATED_CORPUS/GAMEBOOK_TACKLE_GATED_CORPUS were already built
+# GAMEBOOK_RUN_STUFF_GATED_CORPUS/GAMEBOOK_TACKLE_GATED_CORPUS were already built
 # from (see football_db/scripts/ingest_gamebook_boxscores.py), and
 # silver.player_game_stats_pfr was populated for the first time (previously
-# EMPTY) with the same pbp.csv-derived, per-game data PBP_TFL_CORPUS was
+# EMPTY) with the same pbp.csv-derived, per-game data PBP_RUN_STUFF_CORPUS was
 # built from (see football_db/scripts/ingest_pfr_defensive_stats.py). Both
 # tables carry the SAME underlying values as their CSV counterparts (same
 # ratio gate, same undercount tier tags) — this is a storage-layer swap, not
 # a methodology change. gold.player_game_stats (the reconciled merge of
 # both) additionally now covers 1967-2025 for sack/int/fr/ff/comb_tackles/
-# tfl, letting load_gold_stats() move off the legacy, CLAUDE.md-superseded
+# run_stuff, letting load_gold_stats() move off the legacy, CLAUDE.md-superseded
 # ~/data/gold/player_season_card.parquet for that whole range too.
 #
 # Each function below queries Postgres first; on ANY connection/query
@@ -614,8 +614,8 @@ def _pg_conn():
         return None
 
 
-def load_gamebook_tfl_from_db() -> pd.DataFrame | None:
-    """Postgres equivalent of load_gamebook_tfl() (file version, below) --
+def load_gamebook_run_stuff_from_db() -> pd.DataFrame | None:
+    """Postgres equivalent of load_gamebook_run_stuff() (file version, below) --
     same >=70pct completeness-ratio gate (now stored per-row as
     completeness_qualified on silver.player_game_stats_gamebook itself
     rather than recomputed from boxscore.md text), same
@@ -629,7 +629,7 @@ def load_gamebook_tfl_from_db() -> pd.DataFrame | None:
     try:
         df = pd.read_sql("""
             SELECT g.season AS season, gb.franchise_id AS franchise_id,
-                   p.full_name AS player, sum(gb.run_stuff) AS tfl_count, count(*) AS n_obs
+                   p.full_name AS player, sum(gb.run_stuff) AS run_stuff_count, count(*) AS n_obs
             FROM silver.player_game_stats_gamebook gb
             JOIN gold.games g ON g.game_id = gb.game_id
             JOIN gold.players p ON p.player_id = gb.player_id
@@ -641,14 +641,14 @@ def load_gamebook_tfl_from_db() -> pd.DataFrame | None:
     df = df[df["n_obs"] >= MIN_GAMES_QUALIFIED_FLOOR].copy()
     df["team"] = df["franchise_id"].map(_FID_TO_TEAM)
     df = df.dropna(subset=["team"]).copy()
-    df["tfl_tier"] = "gamebooks_boxscores_gated70pct"
-    df["tfl_count"] = df["tfl_count"].fillna(0)
-    return df[["season", "team", "player", "tfl_count", "n_obs", "tfl_tier"]]
+    df["run_stuff_tier"] = "gamebooks_boxscores_gated70pct"
+    df["run_stuff_count"] = df["run_stuff_count"].fillna(0)
+    return df[["season", "team", "player", "run_stuff_count", "n_obs", "run_stuff_tier"]]
 
 
 def load_gamebook_tackle_from_db() -> pd.DataFrame | None:
     """Postgres equivalent of load_gamebook_tackle_gated() (file version,
-    below) -- direct structural mirror of load_gamebook_tfl_from_db()."""
+    below) -- direct structural mirror of load_gamebook_run_stuff_from_db()."""
     conn = _pg_conn()
     if conn is None:
         return None
@@ -673,10 +673,10 @@ def load_gamebook_tackle_from_db() -> pd.DataFrame | None:
     return df[["season", "team", "player", "tackle_count", "n_obs", "tackle_tier"]]
 
 
-def load_pfr_tfl_from_db() -> pd.DataFrame | None:
-    """Postgres equivalent of load_pbp_tfl() (file version, below) --
+def load_pbp_run_stuff_from_db() -> pd.DataFrame | None:
+    """Postgres equivalent of load_pbp_run_stuff() (file version, below) --
     silver.player_game_stats_pfr covers 1978-2025 (not just 1978-1998, but
-    filtered to that range below since 1999+ TFL comes from load_gold_stats
+    filtered to that range below since 1999+ run stuff comes from load_gold_stats
     instead, matching the file version's own filter)."""
     conn = _pg_conn()
     if conn is None:
@@ -684,7 +684,7 @@ def load_pfr_tfl_from_db() -> pd.DataFrame | None:
     try:
         df = pd.read_sql("""
             SELECT season, franchise_id, p.full_name AS player,
-                   sum(pfr.run_stuff) AS tfl_count, count(*) AS n_obs
+                   sum(pfr.run_stuff) AS run_stuff_count, count(*) AS n_obs
             FROM silver.player_game_stats_pfr pfr
             JOIN gold.players p ON p.player_id = pfr.player_id
             WHERE pfr.season BETWEEN 1978 AND 1998 AND pfr.game_type = 'regular'
@@ -694,9 +694,9 @@ def load_pfr_tfl_from_db() -> pd.DataFrame | None:
         conn.close()
     df["team"] = df["franchise_id"].map(_FID_TO_TEAM)
     df = df.dropna(subset=["team"]).copy()
-    df["tfl_tier"] = "pfr_pbp_undercount_1978_1998"
-    df["tfl_count"] = df["tfl_count"].fillna(0)
-    return df[["season", "team", "player", "tfl_count", "n_obs", "tfl_tier"]]
+    df["run_stuff_tier"] = "pfr_pbp_undercount_1978_1998"
+    df["run_stuff_count"] = df["run_stuff_count"].fillna(0)
+    return df[["season", "team", "player", "run_stuff_count", "n_obs", "run_stuff_tier"]]
 
 
 def load_gold_stats_from_db(seasons: list[int]) -> pd.DataFrame | None:
@@ -743,7 +743,7 @@ def load_gold_stats_from_db(seasons: list[int]) -> pd.DataFrame | None:
                    sum(coalesce(pgs.comb_tackle, 0)) AS comb_tackles,
                    sum(coalesce(pgs.solo_tackle, 0)) AS solo,
                    sum(coalesce(pgs.ast_tackle, 0)) AS ast,
-                   sum(coalesce(pgs.run_stuff, 0)) AS tfl
+                   sum(coalesce(pgs.run_stuff, 0)) AS run_stuff
             FROM gold.player_game_stats pgs
             JOIN gold.games g ON g.game_id = pgs.game_id
             JOIN gold.players p ON p.player_id = pgs.player_id
@@ -772,11 +772,11 @@ def load_gold_stats_from_db(seasons: list[int]) -> pd.DataFrame | None:
         .agg(player_id=("player_id", "first"), pos=("pos", "first"),
              g=("g", "sum"), sk=("sk", "sum"), int=("int", "sum"), fr=("fr", "sum"),
              ff=("ff", "sum"), comb_tackles=("comb_tackles", "sum"),
-             solo=("solo", "sum"), ast=("ast", "sum"), tfl=("tfl", "sum"))
+             solo=("solo", "sum"), ast=("ast", "sum"), run_stuff=("run_stuff", "sum"))
     )
     df = _compute_gold_shares(df)
     keep = ["season", "team", "player_id", "player_name", "pos", "g", "sk", "int", "fr", "ff",
-            "comb_tackles", "solo", "ast", "team_solo", "team_ast", "tfl",
+            "comb_tackles", "solo", "ast", "team_solo", "team_ast", "run_stuff",
             "pfr_tackle_share", "pfr_tackle_source", "tackle_source"]
     df["tackle_source"] = "footballdb_gold_pergame"
     return df[[c for c in keep if c in df.columns]].copy()
@@ -811,33 +811,33 @@ def _compute_gold_shares(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ── TFL raw-count loaders (2026-08-21 rebuild — three eras, all counts not
+# ── run stuff raw-count loaders (2026-08-21 rebuild — three eras, all counts not
 #    shares; see module docstring point 1) ──────────────────────────────────
 
-def load_gamebook_tfl() -> pd.DataFrame:
+def load_gamebook_run_stuff() -> pd.DataFrame:
     """
-    1967-1977 TFL: gamebooks_boxscores' completeness-ratio-gated corpus
-    (GAMEBOOK_TFL_GATED_CORPUS), floor-filtered at MIN_GAMES_QUALIFIED_FLOOR.
+    1967-1977 run stuff: gamebooks_boxscores' completeness-ratio-gated corpus
+    (GAMEBOOK_RUN_STUFF_GATED_CORPUS), floor-filtered at MIN_GAMES_QUALIFIED_FLOOR.
 
-    Returns: season, team, player, tfl_count, n_obs, tfl_tier.
-    2026-08-21: tries Postgres first (load_gamebook_tfl_from_db()) --
+    Returns: season, team, player, run_stuff_count, n_obs, run_stuff_tier.
+    2026-08-21: tries Postgres first (load_gamebook_run_stuff_from_db()) --
     see the "Postgres-backed sources" section above. Empty DataFrame
     (with a warning) if neither Postgres nor the corpus file is available.
     """
-    db_df = load_gamebook_tfl_from_db()
+    db_df = load_gamebook_run_stuff_from_db()
     if db_df is not None:
         return db_df
-    if not GAMEBOOK_TFL_GATED_CORPUS.exists():
-        print(f"  [idi] WARNING: {GAMEBOOK_TFL_GATED_CORPUS} not found — "
-              f"run scripts/build_tfl_gated_corpus.py first. 1967-1977 TFL "
+    if not GAMEBOOK_RUN_STUFF_GATED_CORPUS.exists():
+        print(f"  [idi] WARNING: {GAMEBOOK_RUN_STUFF_GATED_CORPUS} not found — "
+              f"run scripts/build_run_stuff_gated_corpus.py first. 1967-1977 run stuff "
               f"will be unavailable this build.")
-        return pd.DataFrame(columns=["season", "team", "player", "tfl_count", "n_obs", "tfl_tier"])
+        return pd.DataFrame(columns=["season", "team", "player", "run_stuff_count", "n_obs", "run_stuff_tier"])
 
-    df = pd.read_csv(GAMEBOOK_TFL_GATED_CORPUS)
+    df = pd.read_csv(GAMEBOOK_RUN_STUFF_GATED_CORPUS)
     df = df[df["games_qualified"] >= MIN_GAMES_QUALIFIED_FLOOR].copy()
-    df = df.rename(columns={"tfl_sum": "tfl_count", "games_qualified": "n_obs"})
-    df["tfl_tier"] = "gamebooks_boxscores_gated70pct"
-    return df[["season", "team", "player", "tfl_count", "n_obs", "tfl_tier"]]
+    df = df.rename(columns={"run_stuff_sum": "run_stuff_count", "games_qualified": "n_obs"})
+    df["run_stuff_tier"] = "gamebooks_boxscores_gated70pct"
+    return df[["season", "team", "player", "run_stuff_count", "n_obs", "run_stuff_tier"]]
 
 
 def load_gamebook_tackle_gated() -> pd.DataFrame:
@@ -845,7 +845,7 @@ def load_gamebook_tackle_gated() -> pd.DataFrame:
     1967-1977 tackle_share: gamebooks_boxscores' completeness-ratio-gated
     tackle corpus (GAMEBOOK_TACKLE_GATED_CORPUS), floor-filtered at
     MIN_GAMES_QUALIFIED_FLOOR — direct structural mirror of
-    load_gamebook_tfl(). See docs/framework_decisions.md §14.
+    load_gamebook_run_stuff(). See docs/framework_decisions.md §14.
 
     Returns: season, team, player, tackle_count, n_obs, tackle_tier.
     2026-08-21: tries Postgres first (load_gamebook_tackle_from_db()) --
@@ -869,38 +869,38 @@ def load_gamebook_tackle_gated() -> pd.DataFrame:
     return df[["season", "team", "player", "tackle_count", "n_obs", "tackle_tier"]]
 
 
-def load_pbp_tfl() -> pd.DataFrame:
+def load_pbp_run_stuff() -> pd.DataFrame:
     """
-    1978-1998 TFL: gamebooks_boxscores' PFR pbp.csv-derived corpus — the
+    1978-1998 run stuff: gamebooks_boxscores' PFR pbp.csv-derived corpus — the
     ONLY source for this 21-season gap, but a confirmed undercount (see
-    module docstring point 1). Every row is tagged tfl_tier=
+    module docstring point 1). Every row is tagged run_stuff_tier=
     "pfr_pbp_undercount_1978_1998" so downstream consumers can filter or
     flag it rather than treat it as equal-confidence to the other two eras.
 
-    Returns: season, team, player, tfl_count, n_obs, tfl_tier.
-    2026-08-21: tries Postgres first (load_pfr_tfl_from_db()) -- see the
+    Returns: season, team, player, run_stuff_count, n_obs, run_stuff_tier.
+    2026-08-21: tries Postgres first (load_pbp_run_stuff_from_db()) -- see the
     "Postgres-backed sources" section above. Empty DataFrame (with a
     warning) if neither Postgres nor the corpus file is available.
     """
-    db_df = load_pfr_tfl_from_db()
+    db_df = load_pbp_run_stuff_from_db()
     if db_df is not None:
         return db_df
-    if not PBP_TFL_CORPUS.exists():
-        print(f"  [idi] WARNING: {PBP_TFL_CORPUS} not found — "
-              f"1978-1998 TFL will be unavailable this build.")
-        return pd.DataFrame(columns=["season", "team", "player", "tfl_count", "n_obs", "tfl_tier"])
+    if not PBP_RUN_STUFF_CORPUS.exists():
+        print(f"  [idi] WARNING: {PBP_RUN_STUFF_CORPUS} not found — "
+              f"1978-1998 run stuff will be unavailable this build.")
+        return pd.DataFrame(columns=["season", "team", "player", "run_stuff_count", "n_obs", "run_stuff_tier"])
 
-    df = pd.read_csv(PBP_TFL_CORPUS)
+    df = pd.read_csv(PBP_RUN_STUFF_CORPUS)
     df = df[(df["season"] >= 1978) & (df["season"] <= 1998)]
     if "game_type" in df.columns:
         df = df[df["game_type"] == "regular"]
     df = df.groupby(["season", "franchise_id", "player"], as_index=False).agg(
-        tfl_count=("run_stuff", "sum"), n_obs=("games", "sum"),
+        run_stuff_count=("run_stuff", "sum"), n_obs=("games", "sum"),
     )
     df["team"] = df["franchise_id"].map(_FID_TO_TEAM)
     df = df.dropna(subset=["team"]).copy()
-    df["tfl_tier"] = "pfr_pbp_undercount_1978_1998"
-    return df[["season", "team", "player", "tfl_count", "n_obs", "tfl_tier"]]
+    df["run_stuff_tier"] = "pfr_pbp_undercount_1978_1998"
+    return df[["season", "team", "player", "run_stuff_count", "n_obs", "run_stuff_tier"]]
 
 
 def load_tackle_opportunity_adjustment() -> pd.DataFrame:
@@ -931,7 +931,7 @@ def load_tackle_opportunity_adjustment() -> pd.DataFrame:
 def load_gold_stats(seasons: list[int]) -> pd.DataFrame:
     """
     Load individual defensive stats from gold parquet.
-    Returns per-player-season: sacks, ints, frs, ffs, games, tfl.
+    Returns per-player-season: sacks, ints, frs, ffs, games, run_stuff.
     Also computes PFR tackle_share for seasons where comb_tackles is available
     (primarily 2001+, plus media-guide-patched seasons for earlier years).
     Gold team codes are uppercase (MIN, PIT); we lowercase them to match
@@ -981,7 +981,7 @@ def load_gold_stats(seasons: list[int]) -> pd.DataFrame:
         df.drop(columns=["_priority"], inplace=True)
 
     # fill NaN stats with 0 for summing
-    for col in ("sk", "int", "fr", "ff", "comb_tackles", "tfl"):
+    for col in ("sk", "int", "fr", "ff", "comb_tackles", "run_stuff"):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
@@ -1012,7 +1012,7 @@ def load_gold_stats(seasons: list[int]) -> pd.DataFrame:
 
     keep = [
         "season", "team", "player_id", "player_name", "pos",
-        "g", "sk", "int", "fr", "ff", "comb_tackles", "tfl",
+        "g", "sk", "int", "fr", "ff", "comb_tackles", "run_stuff",
         "pfr_tackle_share", "pfr_tackle_source", "tackle_source",
     ]
     file_df = df[[c for c in keep if c in df.columns]].copy()
@@ -1172,7 +1172,7 @@ def _idi_row(row: pd.Series) -> float:
     components (see module docstring point 4 for why all five are z-scores,
     not a mix of shares and z-scores).
 
-    tackle_share_z and tfl_component_z are each independently
+    tackle_share_z and run_stuff_component_z are each independently
     present-or-absent. Whichever are missing get dropped from _W_BASE and
     the remaining weights renormalize proportionally.
     """
@@ -1197,13 +1197,13 @@ def compute_idi(
     tcs_df: pd.DataFrame,
     gold_df: pd.DataFrame,
     gamebook_df: pd.DataFrame,
-    gamebook_tfl_df: pd.DataFrame | None = None,
-    pbp_tfl_df: pd.DataFrame | None = None,
+    gamebook_run_stuff_df: pd.DataFrame | None = None,
+    pbp_run_stuff_df: pd.DataFrame | None = None,
     gamebook_tackle_gated_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """
     Merge TCS player-season list with gold stats, gamebook tackle shares,
-    and the three-era TFL raw-count sources, then compute IDI per
+    and the three-era run stuff raw-count sources, then compute IDI per
     player-season.
 
     Tackle share priority (highest → lowest):
@@ -1211,7 +1211,7 @@ def compute_idi(
          completeness-ratio-gated 1967-1977 tackle corpus, floor-filtered.
          Unlike layers 2/3 below (a plain share, z-scored directly), this
          layer gets the SAME rate+shrinkage+volume treatment as
-         TFL/INT/FF (_add_rate_component) — see module docstring point 1
+         run stuff/INT/FF (_add_rate_component) — see module docstring point 1
          and docs/framework_decisions.md §14 for why: raw per-game rate
          shrunk toward a career/population prior, blended 50/50 with a
          z-scored raw count, is the pattern already established this
@@ -1238,13 +1238,13 @@ def compute_idi(
       4. No tackle data → tackle_share_z dropped from the IDI formula,
          weights rebalanced
 
-    TFL source by era (mutually exclusive by season range, no priority
+    run stuff source by era (mutually exclusive by season range, no priority
     conflict — see module docstring point 1):
-      1967-1977: gamebook_tfl_df (gated corpus, floor-filtered)
-      1978-1998: pbp_tfl_df (PFR pbp-derived, confirmed undercount, tagged)
-      1999+:     gold parquet 'tfl' column
+      1967-1977: gamebook_run_stuff_df (gated corpus, floor-filtered)
+      1978-1998: pbp_run_stuff_df (PFR pbp-derived, confirmed undercount, tagged)
+      1999+:     gold parquet 'run_stuff' column
 
-    gamebook_tfl_df / pbp_tfl_df / gamebook_tackle_gated_df are optional
+    gamebook_run_stuff_df / pbp_run_stuff_df / gamebook_tackle_gated_df are optional
     (default None → that source is simply unavailable) so existing callers
     keep working.
 
@@ -1260,7 +1260,7 @@ def compute_idi(
     # (critical for 2001-2018 where starters.csv is absent)
     gold_df["gold_pos"] = gold_df["pos"]
     gold_cols = ["season", "team", "_name_key",
-                 "sk", "g", "int", "ff", "fr", "tfl",
+                 "sk", "g", "int", "ff", "fr", "run_stuff",
                  "solo", "ast", "team_solo", "team_ast",
                  "pfr_tackle_share", "pfr_tackle_source", "tackle_source",
                  "gold_pos"]
@@ -1370,7 +1370,7 @@ def compute_idi(
 
     # Layer 0 (cont'd): overwrite tackle_share_z for gated-corpus rows with
     # the rate+shrinkage+volume component_z, same _add_rate_component
-    # machinery as TFL/INT/FF (module docstring point 1). tier_col=None
+    # machinery as run stuff/INT/FF (module docstring point 1). tier_col=None
     # here deliberately -- _add_rate_component would otherwise overwrite
     # idi_tackle_source (already set above) for every row, including the
     # non-1967-1977 rows this layer doesn't cover.
@@ -1381,7 +1381,7 @@ def compute_idi(
     # sack_component_z (2026-08-22, see module docstring and
     # docs/framework_decisions.md): sack no longer has ANY team-share
     # treatment -- it uses _add_rate_component exclusively, same machinery
-    # as TFL/INT/FF, with sack's own measured phi=2.126 -> k≈7.10 (see
+    # as run stuff/INT/FF, with sack's own measured phi=2.126 -> k≈7.10 (see
     # _PHI above). Raw count ("sk") and games ("g") come from gold_df,
     # available for effectively every row that has gold coverage at all
     # (1960+) -- unlike tackle's Layer-0/1/2 partial coverage, there's no
@@ -1393,52 +1393,52 @@ def compute_idi(
     merged["_sack_nobs"] = merged["g"] if "g" in merged.columns else np.nan
     merged = _add_rate_component(merged, "sack", "sk", "_sack_nobs", None)
 
-    # ── TFL raw count + n_obs, by era (mutually exclusive season ranges) ───
-    merged["_tfl_count"] = np.nan
-    merged["_tfl_nobs"] = np.nan
+    # ── run stuff raw count + n_obs, by era (mutually exclusive season ranges) ───
+    merged["_run_stuff_count"] = np.nan
+    merged["_run_stuff_nobs"] = np.nan
     # object dtype (not np.nan/float64) -- this column later receives string
     # tier labels via .loc assignment; a float64-initialized column raises
     # pandas.errors.LossySetitemError under this environment's pandas/Arrow
     # string-dtype defaults (pre-existing latent bug, hit and fixed here
     # 2026-08-21 while wiring in the §14 tackle_share wiring -- unrelated to
     # that change but blocked being able to run/test it).
-    merged["_tfl_tier"] = pd.Series(pd.NA, index=merged.index, dtype="object")
+    merged["_run_stuff_tier"] = pd.Series(pd.NA, index=merged.index, dtype="object")
 
-    if gamebook_tfl_df is not None and not gamebook_tfl_df.empty:
-        gb = gamebook_tfl_df.copy()
+    if gamebook_run_stuff_df is not None and not gamebook_run_stuff_df.empty:
+        gb = gamebook_run_stuff_df.copy()
         gb["_name_key"] = gb["player"].str.lower().str.strip()
-        gb = gb.rename(columns={"tfl_count": "_c1", "n_obs": "_n1", "tfl_tier": "_t1"})
+        gb = gb.rename(columns={"run_stuff_count": "_c1", "n_obs": "_n1", "run_stuff_tier": "_t1"})
         merged = merged.merge(
             gb[["season", "team", "_name_key", "_c1", "_n1", "_t1"]],
             on=["season", "team", "_name_key"], how="left",
         )
         hit = merged["_n1"].notna()
-        merged.loc[hit, "_tfl_count"] = merged.loc[hit, "_c1"]
-        merged.loc[hit, "_tfl_nobs"] = merged.loc[hit, "_n1"]
-        merged.loc[hit, "_tfl_tier"] = merged.loc[hit, "_t1"]
+        merged.loc[hit, "_run_stuff_count"] = merged.loc[hit, "_c1"]
+        merged.loc[hit, "_run_stuff_nobs"] = merged.loc[hit, "_n1"]
+        merged.loc[hit, "_run_stuff_tier"] = merged.loc[hit, "_t1"]
         merged.drop(columns=["_c1", "_n1", "_t1"], inplace=True)
 
-    if pbp_tfl_df is not None and not pbp_tfl_df.empty:
-        pb = pbp_tfl_df.copy()
+    if pbp_run_stuff_df is not None and not pbp_run_stuff_df.empty:
+        pb = pbp_run_stuff_df.copy()
         pb["_name_key"] = pb["player"].str.lower().str.strip()
-        pb = pb.rename(columns={"tfl_count": "_c2", "n_obs": "_n2", "tfl_tier": "_t2"})
+        pb = pb.rename(columns={"run_stuff_count": "_c2", "n_obs": "_n2", "run_stuff_tier": "_t2"})
         merged = merged.merge(
             pb[["season", "team", "_name_key", "_c2", "_n2", "_t2"]],
             on=["season", "team", "_name_key"], how="left",
         )
-        hit = merged["_tfl_nobs"].isna() & merged["_n2"].notna()
-        merged.loc[hit, "_tfl_count"] = merged.loc[hit, "_c2"]
-        merged.loc[hit, "_tfl_nobs"] = merged.loc[hit, "_n2"]
-        merged.loc[hit, "_tfl_tier"] = merged.loc[hit, "_t2"]
+        hit = merged["_run_stuff_nobs"].isna() & merged["_n2"].notna()
+        merged.loc[hit, "_run_stuff_count"] = merged.loc[hit, "_c2"]
+        merged.loc[hit, "_run_stuff_nobs"] = merged.loc[hit, "_n2"]
+        merged.loc[hit, "_run_stuff_tier"] = merged.loc[hit, "_t2"]
         merged.drop(columns=["_c2", "_n2", "_t2"], inplace=True)
 
-    if "tfl" in merged.columns and "g" in merged.columns:
-        gold_hit = merged["_tfl_nobs"].isna() & merged["season"].ge(1999) & merged["g"].notna() & (merged["g"] > 0)
-        merged.loc[gold_hit, "_tfl_count"] = merged.loc[gold_hit, "tfl"]
-        merged.loc[gold_hit, "_tfl_nobs"] = merged.loc[gold_hit, "g"]
-        merged.loc[gold_hit, "_tfl_tier"] = "gold_1999plus"
+    if "run_stuff" in merged.columns and "g" in merged.columns:
+        gold_hit = merged["_run_stuff_nobs"].isna() & merged["season"].ge(1999) & merged["g"].notna() & (merged["g"] > 0)
+        merged.loc[gold_hit, "_run_stuff_count"] = merged.loc[gold_hit, "run_stuff"]
+        merged.loc[gold_hit, "_run_stuff_nobs"] = merged.loc[gold_hit, "g"]
+        merged.loc[gold_hit, "_run_stuff_tier"] = "gold_1999plus"
 
-    merged = _add_rate_component(merged, "tfl", "_tfl_count", "_tfl_nobs", "_tfl_tier")
+    merged = _add_rate_component(merged, "run_stuff", "_run_stuff_count", "_run_stuff_nobs", "_run_stuff_tier")
 
     # ── INT / FF raw count + n_obs (gold parquet, all eras 1960+) ──────────
     merged["_int_nobs"] = merged["g"] if "g" in merged.columns else np.nan
@@ -1459,9 +1459,9 @@ def compute_idi(
 
     merged["idi"] = merged.apply(_idi_row, axis=1)
     merged["idi_has_tackles"] = pd.notna(merged["tackle_share_z"])
-    merged["idi_has_tfl"] = pd.notna(merged["tfl_component_z"])
+    merged["idi_has_run_stuff"] = pd.notna(merged["run_stuff_component_z"])
     merged.drop(columns=[
-        "_name_key", "_idi_pos_group", "_tfl_count", "_tfl_nobs", "_tfl_tier",
+        "_name_key", "_idi_pos_group", "_run_stuff_count", "_run_stuff_nobs", "_run_stuff_tier",
         "_int_nobs", "_ff_nobs", "_fr_nobs", "_tackle_count", "_tackle_nobs", "_sack_nobs",
     ], inplace=True, errors="ignore")
     return merged

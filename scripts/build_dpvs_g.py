@@ -36,7 +36,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dpvs.tcs import load_or_build_player_game, aggregate_tcs
-from dpvs.idi import load_gold_stats, load_all_gamebook_idi, load_gamebook_tfl, load_pbp_tfl, load_gamebook_tackle_gated, compute_idi
+from dpvs.idi import load_gold_stats, load_all_gamebook_idi, load_gamebook_run_stuff, load_pbp_run_stuff, load_gamebook_tackle_gated, compute_idi
 from dpvs.wowy import compute_wowy
 from dpvs.composite import build_composite, career_summary, compute_run_pass_context
 from dpvs.export import export_all
@@ -85,14 +85,14 @@ def run(
     print("Step 3/5 — Individual Disruption Index (IDI)")
     gold_df = load_gold_stats(seasons)
     gamebook_df = load_all_gamebook_idi(teams=teams)
-    gamebook_tfl_df = load_gamebook_tfl()
-    pbp_tfl_df = load_pbp_tfl()
+    gamebook_run_stuff_df = load_gamebook_run_stuff()
+    pbp_run_stuff_df = load_pbp_run_stuff()
     gamebook_tackle_gated_df = load_gamebook_tackle_gated()
     print(f"  Gold stats: {len(gold_df):,} player-seasons")
     print(f"  Gamebook tackle data (legacy dead path): {len(gamebook_df):,} player-seasons")
     print(f"  Gamebook tackle data (gamebooks_boxscores gated corpus, 1967-1977): {len(gamebook_tackle_gated_df):,} player-seasons")
-    print(f"  Gamebook TFL data (gamebooks_boxscores gated corpus, 1967-1977): {len(gamebook_tfl_df):,} player-seasons")
-    print(f"  PBP TFL data (pfr pbp-derived, 1978-1998, undercount tier): {len(pbp_tfl_df):,} player-seasons")
+    print(f"  Gamebook run stuff data (gamebooks_boxscores gated corpus, 1967-1977): {len(gamebook_run_stuff_df):,} player-seasons")
+    print(f"  PBP run stuff data (pfr pbp-derived, 1978-1998, undercount tier): {len(pbp_run_stuff_df):,} player-seasons")
 
     # Merge TCS with WOWY
     merged = tcs_df.merge(
@@ -102,10 +102,10 @@ def run(
         how="left",
     )
 
-    # Compute IDI (appends idi, tackle_share, tfl_component_z, sack_component_z, etc.)
-    merged = compute_idi(merged, gold_df, gamebook_df, gamebook_tfl_df, pbp_tfl_df, gamebook_tackle_gated_df)
+    # Compute IDI (appends idi, tackle_share, run_stuff_component_z, sack_component_z, etc.)
+    merged = compute_idi(merged, gold_df, gamebook_df, gamebook_run_stuff_df, pbp_run_stuff_df, gamebook_tackle_gated_df)
     print(f"  IDI: {merged['idi_has_tackles'].sum()} rows with gamebook tackles, "
-          f"{merged['idi_has_tfl'].sum()} rows with TFL data")
+          f"{merged['idi_has_run_stuff'].sum()} rows with run stuff data")
 
     # ── Step 4: Composite ────────────────────────────────────────────────────
     print("Step 4/5 — Building composite DPVS-G / DPVS-A / DPVS-P scores")

@@ -17,12 +17,12 @@ Six raw stats needed per player, three different sourcing strategies:
     file the modern-era fit uses) for the target team. No proration: per the
     task brief, these are treated as reliable enough as-is for this era (fr
     especially -- fumble recoveries are a simple, unambiguous box-score
-    count, not a text-narrative-dependent one the way tackle/TFL/FF are).
+    count, not a text-narrative-dependent one the way tackle/run stuff/FF are).
 
-  tfl, ff, tackle_total — PRORATED from gamebooks_boxscores' own
+  run_stuff, ff, tackle_total — PRORATED from gamebooks_boxscores' own
     completeness-ratio-gated corpus (silver.player_game_stats_gamebook,
     completeness_qualified=true rows only -- exactly the source dpvs/idi.py's
-    own "Layer 0" tackle/TFL handling already uses for this era, see that
+    own "Layer 0" tackle/run stuff handling already uses for this era, see that
     module's docstring). Method (identical for all three stats, per the task
     brief): for each player, sum the raw stat across the team-side's
     qualified games only; divide by the TEAM's summed opponent-opportunities
@@ -93,9 +93,9 @@ def load_official_sack_int_fr(season: int, team_abbrev: str) -> pd.DataFrame:
     )
 
 
-def load_prorated_tfl_ff_tackles(conn, franchise_id: int, season: int) -> tuple[pd.DataFrame, dict]:
+def load_prorated_run_stuff_ff_tackles(conn, franchise_id: int, season: int) -> tuple[pd.DataFrame, dict]:
     """Qualified-games rate x full-season-opportunities proration for
-    tfl/ff/tackle_total. Returns (per-player frame, diagnostics dict)."""
+    run_stuff/ff/tackle_total. Returns (per-player frame, diagnostics dict)."""
     # Per-game opponent opportunities + whether this franchise's own side
     # was completeness_qualified that game (bool_or across that game's rows
     # for this franchise -- confirmed uniform per (franchise_id, game_id),
@@ -125,7 +125,7 @@ def load_prorated_tfl_ff_tackles(conn, franchise_id: int, season: int) -> tuple[
 
     players = pd.read_sql("""
         SELECT gb.player_id, p.full_name AS player_name, x.source_player_id AS pfr_id,
-               SUM(gb.run_stuff) FILTER (WHERE gb.completeness_qualified) AS tfl_qual_sum,
+               SUM(gb.run_stuff) FILTER (WHERE gb.completeness_qualified) AS run_stuff_qual_sum,
                SUM(gb.ff) FILTER (WHERE gb.completeness_qualified) AS ff_qual_sum,
                SUM(COALESCE(gb.solo_tackle, 0) + COALESCE(gb.ast_tackle, 0))
                    FILTER (WHERE gb.completeness_qualified) AS tackle_qual_sum
@@ -137,11 +137,11 @@ def load_prorated_tfl_ff_tackles(conn, franchise_id: int, season: int) -> tuple[
         GROUP BY gb.player_id, p.full_name, x.source_player_id
     """, conn, params={"fid": franchise_id, "season": season})
 
-    for c in ("tfl_qual_sum", "ff_qual_sum", "tackle_qual_sum"):
+    for c in ("run_stuff_qual_sum", "ff_qual_sum", "tackle_qual_sum"):
         players[c] = players[c].fillna(0)
 
     rate_denom = qualified_opp if qualified_opp else float("nan")
-    players["tfl"] = players["tfl_qual_sum"] / rate_denom * full_season_opp
+    players["run_stuff"] = players["run_stuff_qual_sum"] / rate_denom * full_season_opp
     players["ff"] = players["ff_qual_sum"] / rate_denom * full_season_opp
     players["tackle_total"] = players["tackle_qual_sum"] / rate_denom * full_season_opp
 
@@ -156,6 +156,17 @@ def load_prorated_tfl_ff_tackles(conn, franchise_id: int, season: int) -> tuple[
 def main():
     weights_blob = json.loads(WEIGHTS_PATH.read_text())
     weights = weights_blob["weights"]
+    # fit_idi_additive_weights.py's fitted weight is keyed "pfr_tfl" (PFR's
+    # own official, sack-inclusive season stat -- see that script's STAT_COLS
+    # comment). This script has no PFR official tackle-for-loss data for
+    # 1971/1972/1974 (predates PFR's 1999+ tackles_loss column entirely), so
+    # it deliberately applies that same fitted weight, out-of-sample, to its
+    # own prorated "run_stuff" proxy (gamebooks_boxscores' non-sack
+    # convention) as the best available stand-in for this era -- a
+    # pre-existing cross-era approximation, not a naming bug. Remap the key
+    # here rather than rename this script's own column to "pfr_tfl", since
+    # the data underneath genuinely IS this project's run_stuff convention.
+    weights = {("run_stuff" if k == "pfr_tfl" else k): v for k, v in weights.items()}
     intercept = weights_blob["intercept"]
     print(f"Loaded fitted weights (from {weights_blob['fit_seasons']}, "
           f"n={weights_blob['n_player_seasons']}, all_pro={weights_blob['n_all_pro']}):")
@@ -168,7 +179,7 @@ def main():
     for fid, season, abbrev in TARGETS:
         print(f"\n{'='*70}\n{season} {abbrev} (franchise_id={fid})\n{'='*70}")
         official = load_official_sack_int_fr(season, abbrev)
-        prorated, diag = load_prorated_tfl_ff_tackles(conn, fid, season)
+        prorated, diag = load_prorated_run_stuff_ff_tackles(conn, fid, season)
         print(f"  qualified games: {diag['n_qualified_games']}/{diag['n_total_games']}  "
               f"qualified_opportunities={diag['qualified_opportunities']:.0f}  "
               f"full_season_opportunities={diag['full_season_opportunities']:.0f}")
@@ -176,7 +187,7 @@ def main():
         merged = prorated.merge(official, left_on="pfr_id", right_on="player_id",
                                  how="outer", suffixes=("", "_off"))
         merged["player_name"] = merged["player_name"].fillna(merged["player_name_off"])
-        for c in ("tfl", "ff", "tackle_total"):
+        for c in ("run_stuff", "ff", "tackle_total"):
             merged[c] = merged[c].fillna(0)
         for c in ("sacks_official", "fr_official", "int_official"):
             merged[c] = merged[c].fillna(0)
@@ -187,7 +198,7 @@ def main():
             [pow(2.718281828, -(s + intercept)) for s in merged["score"]]
         ))
 
-        out_cols = ["player_name", "position", "tackle_total", "sacks", "tfl", "ff", "fr", "int", "score", "prob_all_pro"]
+        out_cols = ["player_name", "position", "tackle_total", "sacks", "run_stuff", "ff", "fr", "int", "score", "prob_all_pro"]
         out = merged[out_cols].sort_values("score", ascending=False).reset_index(drop=True)
         out.insert(0, "rank", out.index + 1)
         print(out.to_string(index=False, float_format=lambda x: f"{x:.3f}"))

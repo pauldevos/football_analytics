@@ -191,7 +191,7 @@ CREATE TABLE gamebook_plays (
     yardline        SMALLINT,
     yardline_side   TEXT,
     clock           TEXT,
-    play_type       TEXT,                       -- RUN/PASS/SACK/TFL/INTERCEPTION/FUMBLE/etc.
+    play_type       TEXT,                       -- RUN/PASS/SACK/RUN_STUFF/INTERCEPTION/FUMBLE/etc.
     player_role     TEXT,                       -- SOLO_TACKLE/ASSISTED_TACKLE/SACK/etc.
     player_name     TEXT,                       -- as named in gamebook
     pfr_player_id   TEXT REFERENCES players(pfr_player_id),  -- resolved, nullable

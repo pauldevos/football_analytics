@@ -139,7 +139,7 @@ def z_score_components(df: pd.DataFrame) -> pd.DataFrame:
     The old position-grouped z-scoring reproduced the exact Donnie Shell
     sack_component_z=4.0 bug one layer up: coverage has the smallest idi
     standard deviation of the three position groups in 58/58 measurable
-    seasons (structural -- DBs rarely record sack/TFL/FF/FR), so the same
+    seasons (structural -- DBs rarely record sack/run stuff/FF/FR), so the same
     absolute gap-above-mean produced a much larger idi_z there than for
     run_stopper/pass_rusher, and that's what actually put Shell's 1978 at
     #2 overall (idi=0.750, a real, correctly-computed, position-blind

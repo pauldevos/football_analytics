@@ -13,14 +13,14 @@ with IDI's gated-component rebalancing (see idi.py's _idi_row /
 _GATED_COMPONENTS) absorbing the gap by spreading that weight across the
 other four components rather than using real tackle data.
 
-This is a direct structural clone of build_tfl_gated_corpus.py (same
+This is a direct structural clone of build_run_stuff_gated_corpus.py (same
 directory) — same completeness-ratio gate (team-side Solo+Ast / opponent
 (rush attempts + completions + times sacked) >= THRESHOLD=0.70, imported
 directly from gamebooks_boxscores' build_defensive_leaderboards.py rather
 than re-derived), same roster-based name canonicalization
 (roster_name_resolver.py's GamebookRosterCanonicalizer), same 1967-1977
 season range. The only difference: this script sums each player's
-Solo+Ast (tackle count) per qualifying game instead of TFL.
+Solo+Ast (tackle count) per qualifying game instead of run stuff.
 
 Checked before building this: gamebooks_boxscores/outputs/ and
 ~/data/gamebooks_v2/defensive_leaderboards.json both already compute
@@ -34,7 +34,7 @@ Output: season, team, player, tackle_sum, solo_sum, ast_sum, games_qualified
 — one row per player-season with at least one qualifying game.
 tackle_sum/games_qualified is the qualifying-games tackle rate; dpvs/idi.py
 computes shrinkage/z-score treatment from these summed numerator/denominator
-pairs, same pattern as the TFL corpus. solo_sum/ast_sum (added 2026-08-22,
+pairs, same pattern as the run stuff corpus. solo_sum/ast_sum (added 2026-08-22,
 per football_analytics' own request to split the combined figure) are the
 same per-qualifying-game Solo/Ast values boxscore.md already carries
 per-player (parse_boxscore()'s row dicts have always had both — this is
@@ -43,7 +43,7 @@ construction solo_sum + ast_sum == tackle_sum for every row.
 
 Usage: python3 build_tackle_gated_corpus.py
     (needs football_db's .venv on PYTHONPATH — same requirement as
-    build_tfl_gated_corpus.py and gamebooks_boxscores/build_defensive_leaderboards.py)
+    build_run_stuff_gated_corpus.py and gamebooks_boxscores/build_defensive_leaderboards.py)
 """
 from __future__ import annotations
 
@@ -80,9 +80,9 @@ OUT_PATH = Path(__file__).resolve().parent.parent / "data_output" / "tackle_game
 # sdg->lac, sfo->sf, tam->tb) -- confirmed directly against
 # gold.franchises. Since dpvs/idi.py merges this corpus onto its own
 # frame on the "team" column, using current_abbreviation meant those 12
-# franchises' entire gamebook-era TFL/tackle numerator NEVER matched at
+# franchises' entire gamebook-era run stuff/tackle numerator NEVER matched at
 # all (Willie Lanier/KC, the Raiders' 1967 leaderboard-topping front
-# four, etc. all silently zeroed) -- this affected build_tfl_gated_corpus.py
+# four, etc. all silently zeroed) -- this affected build_run_stuff_gated_corpus.py
 # too (same bug, same fix needed there).
 FID_TO_TEAM: dict[int, str] = {
     16: "atl", 4: "buf", 2: "chi", 3: "cin", 6: "cle", 11: "clt", 8: "crd",
@@ -176,7 +176,7 @@ def build(seasons: list[int]) -> pd.DataFrame:
     print(f"  sides={total_sides} db_resolved={resolved_ct} qualifying={qual_ct}")
 
     # Canonical name merge: same roster-based resolver used by
-    # build_tfl_gated_corpus.py (see roster_name_resolver.py's module
+    # build_run_stuff_gated_corpus.py (see roster_name_resolver.py's module
     # docstring) — reused directly, not reimplemented.
     canonicalizer = GamebookRosterCanonicalizer(conn)
     canon = {}
@@ -236,7 +236,7 @@ def main():
     print(df.groupby('season').size())
 
     # Quick quasi-Poisson overdispersion estimate for this stat (same
-    # method-of-moments idea idi.py's TFL/INT/FF _PHI values came from —
+    # method-of-moments idea idi.py's run stuff/INT/FF _PHI values came from —
     # season-pooled population rate as mu, Pearson chi-square / (N-1)),
     # printed here so the resulting k can be hand-derived the same way as
     # _K0 / (phi - 1) in dpvs/idi.py. Not persisted -- informational only.

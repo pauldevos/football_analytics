@@ -63,7 +63,7 @@ Real gaps this classifier makes EXPLICIT rather than silently mapping away
 
 Within the single '3-4 OLB (edge)' bucket, a secondary `sub_role` tag
 ('rush_leaning' / 'coverage_leaning') is computed from the player-season's own
-(sack + TFL) per-game rate, sourced from gold.player_game_stats (season
+(sack + run stuff) per-game rate, sourced from gold.player_game_stats (season
 aggregate). This is a continuous signal collapsed to a documented threshold
 for readability, not a hard taxonomy distinction -- see the printed
 distribution for where the split actually falls in real data before treating
@@ -178,13 +178,13 @@ def load_base(conn) -> pd.DataFrame:
 
 
 def load_game_rates(conn) -> pd.DataFrame:
-    """Season-aggregate sack/TFL-per-game rate from gold.player_game_stats,
+    """Season-aggregate sack/run stuff-per-game rate from gold.player_game_stats,
     used only for the 3-4 OLB rush-vs-coverage sub_role tag."""
     query = """
         SELECT pgs.player_id, g.season,
                count(*) AS games,
                sum(pgs.sack) AS sacks,
-               sum(pgs.run_stuff) AS tfls
+               sum(pgs.run_stuff) AS run_stuffs
         FROM gold.player_game_stats pgs
         JOIN gold.games g ON g.game_id = pgs.game_id
         GROUP BY 1, 2
@@ -193,7 +193,7 @@ def load_game_rates(conn) -> pd.DataFrame:
         return pd.read_sql(query, conn)
     except Exception as e:
         print(f"WARNING: could not load game rates for sub_role tagging ({e}); skipping sub_role")
-        return pd.DataFrame(columns=["player_id", "season", "games", "sacks", "tfls"])
+        return pd.DataFrame(columns=["player_id", "season", "games", "sacks", "run_stuffs"])
 
 
 def classify_row(row) -> str:
@@ -227,7 +227,7 @@ def main() -> None:
     # --- sub_role tag for 3-4 OLB ---
     rates = load_game_rates(conn)
     if not rates.empty:
-        rates["rate"] = (rates["sacks"].fillna(0) + rates["tfls"].fillna(0)) / rates["games"].replace(0, pd.NA)
+        rates["rate"] = (rates["sacks"].fillna(0) + rates["run_stuffs"].fillna(0)) / rates["games"].replace(0, pd.NA)
         rate_map = rates.set_index(["player_id", "season"])["rate"].to_dict()
         oli_mask = df["bucket"] == "3-4 OLB (edge)"
         rush_cut = None
@@ -238,7 +238,7 @@ def main() -> None:
             valid = sub_rates.dropna()
             if len(valid) > 0:
                 rush_cut = valid.median()
-                print(f"\n3-4 OLB (edge) sack+TFL/game rate: n={len(valid)}, "
+                print(f"\n3-4 OLB (edge) sack+run stuff/game rate: n={len(valid)}, "
                       f"median={rush_cut:.2f}, mean={valid.mean():.2f}, "
                       f"p25={valid.quantile(.25):.2f}, p75={valid.quantile(.75):.2f}")
                 df.loc[oli_mask, "sub_role"] = sub_rates.apply(

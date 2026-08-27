@@ -100,6 +100,18 @@ _NORMALIZED_COLUMNS: dict[str, list[str]] = {
         "int", "int_yards", "int_td", "long", "pass_defended",
         "ff", "fumbles", "fr", "fr_yards", "fr_td",
         "sack", "comb_tackles", "solo_tackles", "ast_tackles",
+        # "tfl" deliberately NOT renamed to "pfr_tfl" or "run_stuff" here --
+        # this is PFR's own official, sack-inclusive tackles-for-loss stat,
+        # and this whole list normalizes column names at the raw/bronze
+        # scrape layer (RAW_PLAYER_DIR is under ~/data/pfref/raw/... --
+        # already a PFR-namespaced location), which
+        # gamebooks_boxscores/docs/RUN_STUFFS_RENAME_PLAN.md SS7a point 2
+        # says to leave untouched at the point of ingestion. Downstream
+        # consumers outside this PFR-namespaced tree (e.g.
+        # scripts/fit_idi_additive_weights.py) rename it to "pfr_tfl" on
+        # their own side when they load this CSV -- do NOT rename it here
+        # too, and never call it "run_stuff" (that's this project's own,
+        # different, non-sack convention -- see the same doc's SS7a point 1).
         "tfl", "qb_hits", "safety", "awards",
     ],
     # scrimmage, kicking, punting, returns, scoring: columns vary by era;

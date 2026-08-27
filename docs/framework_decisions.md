@@ -379,7 +379,7 @@ old two-tier with/without-tackles pattern to both gated components).
 **Coverage achieved** (`~/data/silver/dpvs_g_player_season.parquet` rebuild,
 1967–2024, 20,541 player-seasons):
 
-| `idi_tfl_source` | Rows | Seasons |
+| `idi_run_stuff_source` | Rows | Seasons |
 |---|---|---|
 | `gold_1999plus` | 10,579 | 1999–2024 |
 | `gamebooks_boxscores_partial_imputed` | 2,609 | 1967–1977 |
@@ -453,14 +453,14 @@ entirely empty.
 
 **What changed in `dpvs/idi.py`:**
 
-1. **Completeness-gated run stuff, 1967-1977.** `scripts/build_tfl_gated_corpus.py`
+1. **Completeness-gated run stuff, 1967-1977.** `scripts/build_run_stuff_gated_corpus.py`
    (new) reuses `gamebooks_boxscores/build_defensive_leaderboards.py`'s own
    completeness-ratio code directly (team Solo+Ast / opponent snaps ≥ 70%)
    rather than re-deriving it, applied per game-side across the full
    1967-1977 corpus (that script's own default range stops at 1974; this
    pass confirmed 1976 and 1977 resolve cleanly via the same DB ratio and
-   included them). Output: `data_output/tfl_gamebooks_gated_1967_1977.csv`
-   — season/team/player/tfl_sum/games_qualified, un-floored. `idi.py` then
+   included them). Output: `data_output/run_stuff_gamebooks_gated_1967_1977.csv`
+   — season/team/player/run_stuff_sum/games_qualified, un-floored. `idi.py` then
    applies `MIN_GAMES_QUALIFIED_FLOOR = 4` at load time — below the floor,
    run stuff is simply absent for that player-season rather than forced from a
    1-2-game sample. A canonical-name-merge bug fix was also needed here:
@@ -476,7 +476,7 @@ entirely empty.
    This is a **confirmed undercount** (~20%+ low on verified elite
    pass-rusher seasons per that repo's own experiment writeup) — used
    because it's the only source for this 21-season gap, and every row it
-   supplies is tagged `idi_tfl_source = "pfr_pbp_undercount_1978_1998"` so
+   supplies is tagged `idi_run_stuff_source = "pfr_pbp_undercount_1978_1998"` so
    it is never silently equal-confidence to the other two eras.
 
 3. **Empirical-Bayes shrinkage on a per-game RATE (not share) for run stuff,
@@ -542,7 +542,7 @@ IDI = 0.23·tackle_share_z + 0.26·run_stuff_component_z + 0.16·sack_share_z
 **Run stuff coverage achieved** (`~/data/silver/dpvs_g_player_season.parquet`
 rebuild, 1967–2024, 20,541 player-seasons — same row count as §11's build):
 
-| `idi_tfl_source` | Rows | Seasons |
+| `idi_run_stuff_source` | Rows | Seasons |
 |---|---|---|
 | `gold_1999plus` | 10,387 | 1999–2024 |
 | `pfr_pbp_undercount_1978_1998` | 7,038 | 1978–1998 |
@@ -624,8 +624,8 @@ run* — a full 1967-2024 rebuild (as done here) gets this right, but a
 narrow `--seasons` slice would under-use career priors it should have
 access to. Left uncommitted per this task's instructions.
 
-**Code/data references:** `dpvs/idi.py` (rewritten), `scripts/build_tfl_gated_corpus.py`
-(new), `scripts/yoy_stability_check.py` (new), `data_output/tfl_gamebooks_gated_1967_1977.csv`
+**Code/data references:** `dpvs/idi.py` (rewritten), `scripts/build_run_stuff_gated_corpus.py`
+(new), `scripts/yoy_stability_check.py` (new), `data_output/run_stuff_gamebooks_gated_1967_1977.csv`
 (new, 9,313 rows).
 
 ---
@@ -638,7 +638,7 @@ Bill" / "Bill Bergey" / "Bergey"), initials ("Adams, Julius" / "J. Adams"),
 jersey-number-only rows ("56"), sub/role markers ("Athas (sub)"), and
 OCR garbage ("Wilting Heashoff"). §12's own Lambert 1976 spot-check note
 (run stuff "now 3/10 games... was fragmented 2+1+0+0 before the name-merge fix")
-had already surfaced the mechanism: `build_tfl_gated_corpus.py`'s
+had already surfaced the mechanism: `build_run_stuff_gated_corpus.py`'s
 canonicalization block only merged a bare-surname/single-initial variant
 into a "full" name, and only when EXACTLY ONE such "full" variant existed
 per (season, franchise, surname) — since "Bergey, Bill" and "Bill Bergey"
@@ -669,7 +669,7 @@ with no roster surname match at all (likely real OCR garbage, or a
 genuine roster-coverage gap — see caveat below) are left unmatched under
 their own normalized name rather than force-merged.
 
-`build_tfl_gated_corpus.py`'s canonicalization block (previously lines
+`build_run_stuff_gated_corpus.py`'s canonicalization block (previously lines
 136-184) now calls this resolver instead of the old heuristic; the
 completeness-ratio gating, DB team-stats resolution, and output shape are
 unchanged.
@@ -691,7 +691,7 @@ resolver) — fewer, more correct rows, consistent with real fragmentation
 being merged away rather than newly created.
 
 **Jack Lambert 1976 (the flagged discrepancy):** now a single canonical
-row — `tfl_sum=3.0`, `games_qualified=11` (previously 3/10 under the old,
+row — `run_stuff_sum=3.0`, `games_qualified=11` (previously 3/10 under the old,
 partially-working merge; the extra qualifying game came from "J.Lambert",
 which the old heuristic's initial-matching branch should have caught but
 a residual no-space "J.Lambert" token-splitting gap prevented — fixed in
@@ -795,8 +795,8 @@ unmerged variant or entirely absent from any player's total — accurate
 by construction (no guessing), but not complete.
 
 **Code/data references:** `gamebooks_boxscores/roster_name_resolver.py`
-(new), `scripts/build_tfl_gated_corpus.py` (canonicalization block
-rewritten), `data_output/tfl_gamebooks_gated_1967_1977.csv` (rebuilt,
+(new), `scripts/build_run_stuff_gated_corpus.py` (canonicalization block
+rewritten), `data_output/run_stuff_gamebooks_gated_1967_1977.csv` (rebuilt,
 7,262 rows), `~/data/silver/dpvs_g_player_season.parquet` (rebuilt, full
 1967-2024). Left uncommitted per this task's instructions.
 
@@ -823,7 +823,7 @@ z-score needs the whole population as its mean/sd denominator, not the
 visible top slice. So a full-population build was required.
 
 **`scripts/build_tackle_gated_corpus.py` (new):** a direct structural
-clone of `build_tfl_gated_corpus.py` — same >=70% completeness-ratio gate
+clone of `build_run_stuff_gated_corpus.py` — same >=70% completeness-ratio gate
 (imported directly from gamebooks_boxscores' `build_defensive_leaderboards.py`,
 not re-derived), same roster-based name canonicalization
 (`roster_name_resolver.py`'s `GamebookRosterCanonicalizer`, reused
@@ -841,7 +841,7 @@ volume treatment (`_add_rate_component`: empirical-Bayes-shrunk per-game
 rate, 50/50-blended with a z-scored raw season count), not the plain
 share-then-z-score treatment §12 kept for `sack_share`/PFR `tackle_share`
 in other eras. New `load_gamebook_tackle_gated()` mirrors
-`load_gamebook_tfl()` exactly. `compute_idi()` gained a new highest-
+`load_gamebook_run_stuff()` exactly. `compute_idi()` gained a new highest-
 priority "Layer 0" for tackle_share: for 1967-1977 rows with a hit in the
 gated corpus, `tackle_share_z` is overwritten with the rate+volume
 `tackle_component_z` (all other eras' `tackle_share_z` computation is
@@ -856,7 +856,7 @@ than run stuff's 2.69 — i.e. under this same framework, tackle counts carry
 (intuitive: far more observations per game than a rare event), so tackle
 gets `k≈2.07`, the *least* shrinkage of the four rate components.
 
-**Incidental fix, required to run anything:** `merged["_tfl_tier"] = np.nan`
+**Incidental fix, required to run anything:** `merged["_run_stuff_tier"] = np.nan`
 (pre-existing code, unrelated to this pass) initializes a float64 column
 that later receives string tier labels via `.loc` — this environment's
 pandas raises `LossySetitemError` on that assignment (a real, if latent,
@@ -867,7 +867,7 @@ pattern to the new `_tackle_count`/`_tackle_nobs` columns from the start.
 **A second, much bigger bug found via the Willie Lanier spot-check:**
 Willie Lanier came back `tackle_share_z=NaN` for every single season
 despite being in the freshly-built corpus CSV. Root cause: both
-`build_tfl_gated_corpus.py` (§12) and the new `build_tackle_gated_corpus.py`
+`build_run_stuff_gated_corpus.py` (§12) and the new `build_tackle_gated_corpus.py`
 wrote each row's team code from `gold.franchises.current_abbreviation`
 (queried directly from the DB), but `dpvs/idi.py` merges this corpus onto
 its frame on the `team` column using gold parquet's own historic/PFR-style
@@ -887,12 +887,12 @@ already shipped with — undetected because none of its spot-check players
 to play for an affected franchise.
 
 **Fixed in both scripts** (not just the new one, since the bug is
-identical and pre-existing in `build_tfl_gated_corpus.py` too): replaced
+identical and pre-existing in `build_run_stuff_gated_corpus.py` too): replaced
 the DB `current_abbreviation` query with a hardcoded `FID_TO_TEAM` map —
 the historic/PFR-style code per franchise, identical to `dpvs/idi.py`'s
 own `_FID_TO_TEAM` (kept as a duplicated constant rather than a
 cross-package import, to avoid a `scripts/` file reaching into `dpvs/`).
-Both corpora rebuilt after the fix; `tfl_gamebooks_gated_1967_1977.csv`
+Both corpora rebuilt after the fix; `run_stuff_gamebooks_gated_1967_1977.csv`
 and `tackle_gamebooks_gated_1967_1977.csv` are unchanged in row count
 (7,262 each — the bug was in the *label*, not which games/players were
 captured) but now actually match onto IDI for the previously-orphaned
@@ -913,7 +913,7 @@ hiding a mechanical bug rather than a genuine data-availability ceiling.
 
 **Run stuff coverage also jumped from the same fix** (not the focus of this
 task, but a direct side effect since both corpora shared the bug):
-`idi_tfl_source == "gamebooks_boxscores_gated70pct"` rows in 1967-1977
+`idi_run_stuff_source == "gamebooks_boxscores_gated70pct"` rows in 1967-1977
 rose from 1,218 (§12/§13's number, corpus-wide) to **2,256** — run stuff
 coverage for this era nearly doubled from a bug fix, not new data.
 
@@ -970,14 +970,14 @@ league, with remaining gaps (the ~14% of player-seasons below the
 4-qualifying-game floor, the ~5% of names §13 correctly declined to
 guess on) understood and flagged rather than hidden. The one thing this
 pass did NOT re-verify is whether some other downstream consumer of
-`tfl_gamebooks_gated_1967_1977.csv` (outside `dpvs/idi.py`) depends on
+`run_stuff_gamebooks_gated_1967_1977.csv` (outside `dpvs/idi.py`) depends on
 its old, buggy team-code convention — worth a quick grep before treating
 that CSV's schema as fully stable.
 
 **Code/data references:** `scripts/build_tackle_gated_corpus.py` (new),
-`scripts/build_tfl_gated_corpus.py` and `dpvs/idi.py` (franchise-code /
+`scripts/build_run_stuff_gated_corpus.py` and `dpvs/idi.py` (franchise-code /
 dtype fixes), `data_output/tackle_gamebooks_gated_1967_1977.csv` (new,
-7,262 rows), `data_output/tfl_gamebooks_gated_1967_1977.csv` (rebuilt,
+7,262 rows), `data_output/run_stuff_gamebooks_gated_1967_1977.csv` (rebuilt,
 franchise-code fix only, still 7,262 rows), `~/data/silver/dpvs_g_player_season.parquet`
 (rebuilt, full 1967-2024). Left uncommitted per this task's instructions.
 
@@ -1020,11 +1020,11 @@ compares the full captured initial string ("br") against each
 candidate's real leading-name initials, resolving it uniquely to Billy
 Ray Smith.
 
-Corpus-wide effect (`build_tfl_gated_corpus.py`'s canonicalizer stats,
+Corpus-wide effect (`build_run_stuff_gated_corpus.py`'s canonicalizer stats,
 identical for the tackle-corpus builder since both share one resolver
 pass): `matched_unique` 12,537→12,543, `matched_disambiguated` 674→677
 (includes the B.R. Smith compound match, 3 raw-name-instances across
-1968-69), `unmatched` 468→461. `tfl_gamebooks_gated_1967_1977.csv` /
+1968-69), `unmatched` 468→461. `run_stuff_gamebooks_gated_1967_1977.csv` /
 `tackle_gamebooks_gated_1967_1977.csv` row counts dropped 7,262→7,255 —
 expected, not a regression: merging previously-split name variants onto
 one real player reduces the player-season row count by exactly the number
@@ -1038,7 +1038,7 @@ the shared resolver — confirmed broken on any case with two full-name-
 SHAPED variants of the same player (e.g. "Bergey, Bill" vs "Bill Bergey"
 both read as "full names" to a token-count check, so they'd never merge).
 Replaced with a direct `GamebookRosterCanonicalizer` import, same pattern
-as `build_tfl_gated_corpus.py` / `build_tackle_gated_corpus.py` — a
+as `build_run_stuff_gated_corpus.py` / `build_tackle_gated_corpus.py` — a
 name-resolution swap only, the completeness-ratio gating and
 leaderboard-construction logic are untouched.
 `~/data/gamebooks_v2/defensive_leaderboards.json` regenerated; spot-check
@@ -1112,7 +1112,7 @@ intermediate check.
 (parsing fix + override-file wiring), `gamebooks_boxscores/roster_name_overrides.json`
 (new), `gamebooks_boxscores/build_defensive_leaderboards.py` (resolver
 swap), `gamebooks_boxscores/CLAUDE.md` (new Tools-section documentation),
-`data_output/tfl_gamebooks_gated_1967_1977.csv` /
+`data_output/run_stuff_gamebooks_gated_1967_1977.csv` /
 `data_output/tackle_gamebooks_gated_1967_1977.csv` (rebuilt, 7,255 rows
 each), `~/data/gamebooks_v2/defensive_leaderboards.json` (regenerated),
 `~/data/silver/dpvs_g_player_season.parquet` (rebuilt, full 1967-2024).
@@ -1131,7 +1131,7 @@ end-to-end validation.
 **Tasks 1-2 (football_db side, summarized):** `silver.player_game_stats_gamebook`
 reloaded with the §15 name-resolver fixes (30,388 rows, 1967-1977, now
 carrying a `completeness_qualified` flag per row instead of the ratio gate
-living only in `build_tfl_gated_corpus.py`/`build_tackle_gated_corpus.py`'s
+living only in `build_run_stuff_gated_corpus.py`/`build_tackle_gated_corpus.py`'s
 CSV outputs). `silver.player_game_stats_pfr` populated for the first time —
 422,823 rows, 1978-2025, `pbp.csv`-derived stats (this project's own
 scoring convention) with player identity upgraded via
@@ -1148,13 +1148,13 @@ full corpus, not introduced by this pass.
 
 | Component | Before | After | Still falls back to file when |
 |---|---|---|---|
-| 1967-1977 run stuff | `data_output/tfl_gamebooks_gated_1967_1977.csv` | `silver.player_game_stats_gamebook` (same >=70% ratio gate, now a stored column not a recomputation) | Postgres unreachable |
+| 1967-1977 run stuff | `data_output/run_stuff_gamebooks_gated_1967_1977.csv` | `silver.player_game_stats_gamebook` (same >=70% ratio gate, now a stored column not a recomputation) | Postgres unreachable |
 | 1967-1977 tackle_share | `data_output/tackle_gamebooks_gated_1967_1977.csv` | same table | Postgres unreachable |
 | 1978-1998 run stuff (undercount-tagged) | `gamebooks_boxscores/outputs/pfr_pbp_defensive_stats_1978_2025.csv` | `silver.player_game_stats_pfr` | Postgres unreachable |
 | sack_share / int / fr / ff / comb_tackles / run_stuff, 1967-2025 | `~/data/gold/player_season_card.parquet` (CLAUDE.md-superseded layer) | `gold.player_game_stats` | season < 1967 (no Postgres per-game source built) |
 
-Each of the four rewired loaders (`load_gamebook_tfl_from_db()`,
-`load_gamebook_tackle_from_db()`, `load_pfr_tfl_from_db()`,
+Each of the four rewired loaders (`load_gamebook_run_stuff_from_db()`,
+`load_gamebook_tackle_from_db()`, `load_pbp_run_stuff_from_db()`,
 `load_gold_stats_from_db()`, all new in `dpvs/idi.py`) is tried first; the
 original file-based function only runs if the Postgres connection itself
 fails, not as a quality trade-off — when the DB is reachable (the normal
@@ -1698,7 +1698,7 @@ shown from BOTH starting points to be honest about what's actually live.
 **Mechanism** (`scripts/build_tackle_opportunity_ratio.py`, new prep
 script + `dpvs/idi.py`'s `load_tackle_opportunity_adjustment()`, new
 loader — same prep-script/loader-function split as
-`build_tfl_gated_corpus.py`/`build_tackle_gated_corpus.py`):
+`build_run_stuff_gated_corpus.py`/`build_tackle_gated_corpus.py`):
 
 1. "Defensive opportunities" for a team-season = **exactly**
    `gamebooks_boxscores/build_defensive_leaderboards.py`'s own
@@ -2209,7 +2209,7 @@ that season — sourced from `dpvs/idi.py`'s own already-validated,
 name-resolved loaders (`load_gamebook_tackle_gated()` for 1967-1977 reused
 directly; an equivalent loader built for 1978-1998 from the same
 `pfr_pbp_defensive_stats_1978_2025.csv` this project already trusts for run stuff,
-mirroring `load_pbp_tfl()`'s own pattern) rather than re-deriving name
+mirroring `load_pbp_run_stuff()`'s own pattern) rather than re-deriving name
 matching from scratch. 91.7% of pre-1999 participant-games resolved a season
 tackle-count proxy.
 

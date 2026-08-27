@@ -101,7 +101,7 @@ PFREF_BOXSCORES = Path.home() / "data" / "pfref" / "raw" / "boxscores"
 OUT_PATH = Path(__file__).resolve().parent.parent / "data_output" / "tackle_gamebooks_qualified_plays_offense_1967_1977.csv"
 
 # franchise_id -> corpus-standard lowercase code, same map used by
-# build_tackle_gated_corpus.py / build_tfl_gated_corpus.py (2026-08-21 fix
+# build_tackle_gated_corpus.py / build_run_stuff_gated_corpus.py (2026-08-21 fix
 # -- current_abbreviation differs from this for 12/28 franchises).
 FID_TO_TEAM: dict[int, str] = {
     16: "atl", 4: "buf", 2: "chi", 3: "cin", 6: "cle", 11: "clt", 8: "crd",
