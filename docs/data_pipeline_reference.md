@@ -101,6 +101,8 @@ Also fixed: 2-letter team codes (GB, OK, TB, SF, etc.), markdown table pipe-stri
 - 37% of files are genuine score-sheet-only (not recoverable OCR failures)
 - Some game files appear 2-3× under different names (duplicate OCR pages — deduplicate by play text)
 
+**Note: `gamebooks_research/` (referenced throughout this section) was archived and deleted from disk.** The commands below no longer run as written; this section is kept as a historical record of what the analysis found, not a runnable reference. Current gamebook work happens in `gamebooks_boxscores/` against the unified `~/data/gamebooks/` corpus instead.
+
 **Extracted play data (Alan Page only):**
 
 | File | Rows | Notes |

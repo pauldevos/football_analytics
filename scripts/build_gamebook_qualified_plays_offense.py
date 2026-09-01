@@ -296,7 +296,7 @@ def main() -> None:
         # NFL convention (a Jan/Feb-dated postseason game belongs to the
         # season that started the previous fall) -- NOT the `season`
         # bucket used for output aggregation, which is int(gid[:4]) taken
-        # from the gamebooks_v2 folder id (same convention
+        # from the gamebooks folder id (same convention
         # build_tackle_gated_corpus.py already uses for the numerator
         # corpus this denominator must match up with). Confirmed directly:
         # 19710117_sb_dal_at_clt (Super Bowl V) has content_date

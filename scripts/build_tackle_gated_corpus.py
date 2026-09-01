@@ -23,7 +23,7 @@ season range. The only difference: this script sums each player's
 Solo+Ast (tackle count) per qualifying game instead of run stuff.
 
 Checked before building this: gamebooks_boxscores/outputs/ and
-~/data/gamebooks_v2/defensive_leaderboards.json both already compute
+~/data/gamebooks/defensive_leaderboards.json both already compute
 season tackle numbers with this same gate, but defensive_leaderboards.json
 truncates to the top-15 tacklers per season (per its own module
 docstring) — not a full population, so not usable as a season-wide

@@ -17,7 +17,7 @@ The core problem: traditional counting stats (sacks, tackles) fail to capture co
 | Repo | Purpose |
 |------|---------|
 | `/Users/devos/github/football/football_analytics/ingestion/pfref/` | PFR scraper — offensive/defensive player stats, team stats, rosters, boxscores |
-| `/Users/devos/github/football/gamebooks_research/` | Gamebook OCR pipeline — per-play defender attribution from 1967–1981 gamebook PDFs |
+| `/Users/devos/github/football/gamebooks_boxscores/` | Current, canonical gamebook boxscore + PBP extraction — operates on the unified `~/data/gamebooks/` corpus (1967-2001, all teams) |
 | `/Users/devos/github/football/media_guide_parser/` | Media guide PDF extraction — defensive season stats from team yearbooks (pre-1995 fills) |
 
 ## Primary Data
@@ -37,13 +37,14 @@ All under `/Users/devos/data/pfref/`:
 Gamebook play-by-play (defender attribution) — current sources for DPVS:
 - `/Users/devos/data/gamebooks_processed/ocr_cache_mistral/` — Mistral OCR'd text files (hash-keyed)
 - `/Users/devos/data/gamebooks_processed/ocr_named_mistral/` — same, named `YYYYMMDDVIS@HOME.txt`
-- Processed CSVs in `/Users/devos/github/football/gamebooks_research/` (see that repo's CLAUDE.md) — superseded pipeline, kept because DPVS still reads its output
+- `/Users/devos/data/gamebooks_processed/teams/{team}/seasons/{season}_defense.csv` — per-team season CSVs from the old, now-deleted `gamebooks_research/` pipeline; kept live because `dpvs/idi.py` still reads them, even though the repo that produced them is gone
 - Teams available: Minnesota Vikings 1967–1981, Pittsburgh Steelers 1969–1973
 
-Note: new gamebook boxscore extraction happens in `gamebooks_boxscores/` against `~/data/gamebooks_v2/`
-(much broader corpus, all teams). Its `boxscore.md` output isn't wired into DPVS or gold yet — that's
-listed as an open gap in the root CLAUDE.md. Don't start new gamebook OCR/extraction work through
-`gamebooks_research/`; it's only referenced here because DPVS's *existing* CSVs came from it.
+Note: new gamebook boxscore extraction happens in `gamebooks_boxscores/` against `~/data/gamebooks/`
+(the unified 1967-2001 corpus, all teams, consolidated 2026-09-01). Its `boxscore.md`/`pbp.csv` output
+isn't wired into DPVS or gold yet — that's listed as an open gap in the root CLAUDE.md. `gamebooks_research/`
+no longer exists on disk (archived) — its CSV *output* above is still read by `idi.py`, but there's no
+repo to go back to for new gamebook OCR/extraction work; use `gamebooks_boxscores/` for that.
 
 Media guide data:
 - `/Users/devos/github/football/media_guide_parser/` — extraction pipeline, 982+ pages processed

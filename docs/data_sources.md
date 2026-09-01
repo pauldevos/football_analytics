@@ -174,7 +174,7 @@ Draft position is a reasonable proxy for expected player talent level, useful in
 
 **Processed cache:** `/Users/devos/data/gamebooks_processed/ocr_cache_mistral/` (hash-keyed)
 **Named copies:** `/Users/devos/data/gamebooks_processed/ocr_named_mistral/` (game ID named)
-**Research repo:** `/Users/devos/github/football/gamebooks_research/`
+**Research repo:** `/Users/devos/github/football/gamebooks_research/` — **archived, no longer exists on disk.** This whole section describes that pipeline's historical output; the per-team CSVs under `gamebooks_processed/teams/` are still live and read by `dpvs/idi.py`, but the repo and commands referenced below no longer exist. Current gamebook work is `gamebooks_boxscores/` against `~/data/gamebooks/`.
 
 **What it gives us:**
 - Individual defender named on each play (tackle, sack, fumble forced, etc.)
@@ -208,7 +208,7 @@ is_solo, co_tacklers, ocr_conf, description, play_text
 year, filename, page_credits, total_credits, tackle_share, players_credited
 ```
 
-**To extend coverage:** Run `team_defense_pipeline.py` for other teams (requires gamebook PDFs to exist in `~/data/gamebooks/`).
+**To extend coverage:** `team_defense_pipeline.py` no longer exists (deleted with `gamebooks_research/`). New gamebook coverage now comes from `gamebooks_boxscores/` processing games directly against `~/data/gamebooks/` — see that repo's CLAUDE.md.
 
 ---
 

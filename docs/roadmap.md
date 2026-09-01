@@ -136,7 +136,7 @@ WHERE pfr_player_id = '/players/W/WhitRe00.htm';
 **Two sources:**
 
 **6a. Gamebook pipeline (pre-2001, MIN/PIT only)**
-- Load `page_plays_final.csv` from gamebooks_research repo
+- `gamebooks_research` (and `page_plays_final.csv`) no longer exists — this plan needs re-scoping against `gamebooks_boxscores`' current `boxscore.md`/`pbp.csv` output in `~/data/gamebooks/games/` instead
 - Resolve player names to `pfr_player_id` via name matching against players table
 - Aggregate per-player per-game: count sacks, tackles, ints, etc.
 - Insert with `data_source = 'gamebook_mistral'` or `'gamebook_tesseract'`
